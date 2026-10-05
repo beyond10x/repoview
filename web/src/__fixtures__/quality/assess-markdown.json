@@ -1,0 +1,348 @@
+{
+  "root": ".",
+  "language": "markdown",
+  "rating": "B-",
+  "score_max": 100,
+  "summary": {
+    "score": 67,
+    "packages": 34,
+    "symbols": 136,
+    "imports": 0,
+    "suggestions": 29,
+    "executable_fixes": 29,
+    "findings": 30,
+    "violations": 0,
+    "diagnostics": 0
+  },
+  "scores": {
+    "overall": 67,
+    "boundary": 100,
+    "test_boundary": 100,
+    "coupling": 100,
+    "side_effect": 100,
+    "coverage": 100,
+    "maintainability": 67,
+    "pressure": 0
+  },
+  "validation": {
+    "passed": true,
+    "resolution_mode": "structural",
+    "diagnostics": 0,
+    "files": 34,
+    "complete": true
+  },
+  "metrics": {
+    "debt_marker_count": 0,
+    "document_count": 34,
+    "gates": ["all"],
+    "heading_count": 102,
+    "line_count": 2200,
+    "provider_score_model": "markdown-structure-v1",
+    "score_model": "aggregate-v0"
+  },
+  "finding_counts": {
+    "markdown_large_section": 1,
+    "markdown_missing_h1": 29
+  },
+  "finding_category_counts": {
+    "other": 30
+  },
+  "top_findings": [
+    {
+      "kind": "markdown_missing_h1",
+      "severity": "warning",
+      "location": {
+        "uri": ".engineering/planning/review-result/shell-acceptance-round-1.md",
+        "range": {
+          "start": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          }
+        }
+      },
+      "reason": "Document has no H1 title."
+    },
+    {
+      "kind": "markdown_missing_h1",
+      "severity": "warning",
+      "location": {
+        "uri": ".engineering/planning/review-result/shell-scope-round-1.md",
+        "range": {
+          "start": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          }
+        }
+      },
+      "reason": "Document has no H1 title."
+    },
+    {
+      "kind": "markdown_missing_h1",
+      "severity": "warning",
+      "location": {
+        "uri": ".engineering/planning/epic/plan.md",
+        "range": {
+          "start": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          }
+        }
+      },
+      "reason": "Document has no H1 title."
+    },
+    {
+      "kind": "markdown_missing_h1",
+      "severity": "warning",
+      "location": {
+        "uri": ".engineering/planning/epic/quality.md",
+        "range": {
+          "start": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          }
+        }
+      },
+      "reason": "Document has no H1 title."
+    },
+    {
+      "kind": "markdown_missing_h1",
+      "severity": "warning",
+      "location": {
+        "uri": ".engineering/planning/epic/release.md",
+        "range": {
+          "start": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          }
+        }
+      },
+      "reason": "Document has no H1 title."
+    },
+    {
+      "kind": "markdown_missing_h1",
+      "severity": "warning",
+      "location": {
+        "uri": ".engineering/planning/epic/repository.md",
+        "range": {
+          "start": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          }
+        }
+      },
+      "reason": "Document has no H1 title."
+    },
+    {
+      "kind": "markdown_missing_h1",
+      "severity": "warning",
+      "location": {
+        "uri": ".engineering/planning/epic/shell.md",
+        "range": {
+          "start": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          }
+        }
+      },
+      "reason": "Document has no H1 title."
+    },
+    {
+      "kind": "markdown_missing_h1",
+      "severity": "warning",
+      "location": {
+        "uri": ".engineering/planning/epic/spec.md",
+        "range": {
+          "start": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          }
+        }
+      },
+      "reason": "Document has no H1 title."
+    },
+    {
+      "kind": "markdown_missing_h1",
+      "severity": "warning",
+      "location": {
+        "uri": ".engineering/planning/epic/static-export.md",
+        "range": {
+          "start": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          }
+        }
+      },
+      "reason": "Document has no H1 title."
+    },
+    {
+      "kind": "markdown_missing_h1",
+      "severity": "warning",
+      "location": {
+        "uri": ".engineering/planning/executable-system-specification/read-model.md",
+        "range": {
+          "start": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          },
+          "end": {
+            "line": 0,
+            "column": 0,
+            "offset": 0
+          }
+        }
+      },
+      "reason": "Document has no H1 title."
+    }
+  ],
+  "suggestions": {
+    "total": 29,
+    "executable": 29
+  },
+  "top_suggestions": [
+    {
+      "id": "prop_001",
+      "kind": "fix_markdown_structure",
+      "title": "Add missing Markdown H1",
+      "summary": ".engineering/planning/architecture-design/repoview.md has no H1 title.",
+      "confidence": "high",
+      "risk": "low",
+      "operations": 1
+    },
+    {
+      "id": "prop_002",
+      "kind": "fix_markdown_structure",
+      "title": "Add missing Markdown H1",
+      "summary": ".engineering/planning/epic/plan.md has no H1 title.",
+      "confidence": "high",
+      "risk": "low",
+      "operations": 1
+    },
+    {
+      "id": "prop_003",
+      "kind": "fix_markdown_structure",
+      "title": "Add missing Markdown H1",
+      "summary": ".engineering/planning/epic/quality.md has no H1 title.",
+      "confidence": "high",
+      "risk": "low",
+      "operations": 1
+    },
+    {
+      "id": "prop_004",
+      "kind": "fix_markdown_structure",
+      "title": "Add missing Markdown H1",
+      "summary": ".engineering/planning/epic/release.md has no H1 title.",
+      "confidence": "high",
+      "risk": "low",
+      "operations": 1
+    },
+    {
+      "id": "prop_005",
+      "kind": "fix_markdown_structure",
+      "title": "Add missing Markdown H1",
+      "summary": ".engineering/planning/epic/repository.md has no H1 title.",
+      "confidence": "high",
+      "risk": "low",
+      "operations": 1
+    },
+    {
+      "id": "prop_006",
+      "kind": "fix_markdown_structure",
+      "title": "Add missing Markdown H1",
+      "summary": ".engineering/planning/epic/shell.md has no H1 title.",
+      "confidence": "high",
+      "risk": "low",
+      "operations": 1
+    },
+    {
+      "id": "prop_007",
+      "kind": "fix_markdown_structure",
+      "title": "Add missing Markdown H1",
+      "summary": ".engineering/planning/epic/spec.md has no H1 title.",
+      "confidence": "high",
+      "risk": "low",
+      "operations": 1
+    },
+    {
+      "id": "prop_008",
+      "kind": "fix_markdown_structure",
+      "title": "Add missing Markdown H1",
+      "summary": ".engineering/planning/epic/static-export.md has no H1 title.",
+      "confidence": "high",
+      "risk": "low",
+      "operations": 1
+    },
+    {
+      "id": "prop_009",
+      "kind": "fix_markdown_structure",
+      "title": "Add missing Markdown H1",
+      "summary": ".engineering/planning/executable-system-specification/read-model.md has no H1 title.",
+      "confidence": "high",
+      "risk": "low",
+      "operations": 1
+    },
+    {
+      "id": "prop_010",
+      "kind": "fix_markdown_structure",
+      "title": "Add missing Markdown H1",
+      "summary": ".engineering/planning/review-result/adversary-server-skeleton-pass-1.md has no H1 title.",
+      "confidence": "high",
+      "risk": "low",
+      "operations": 1
+    }
+  ]
+}
