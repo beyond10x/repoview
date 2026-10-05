@@ -65,9 +65,23 @@ export function readMode(): Mode {
   return meta?.content === 'static' ? 'static' : 'server'
 }
 
-/** `path` with each `/`-separated segment URL-encoded. */
-function encodePath(path: string): string {
-  return path.split('/').map(encodeURIComponent).join('/')
+/** `segment` percent-decoded, or as given when it holds a malformed escape. */
+function decoded(segment: string): string {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return segment
+  }
+}
+
+/**
+ * `path` with each `/`-separated segment URL-encoded, or `null` when a segment is empty, `.` or
+ * `..` after decoding: the URL parser would resolve those, and the request would leave its prefix.
+ */
+function encodePath(path: string): string | null {
+  const segments = path.split('/')
+  if (segments.some((segment) => ['', '.', '..'].includes(decoded(segment)))) return null
+  return segments.map(encodeURIComponent).join('/')
 }
 
 /**
@@ -80,7 +94,11 @@ export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
     const headers: Record<string, string> = {}
     const token = isStatic ? null : storedToken()
     if (token !== null) headers[TOKEN_HEADER] = token
-    const url = isStatic ? `./data/${encodePath(path)}.json` : `/api/${encodePath(path)}`
+    const encoded = encodePath(path)
+    if (encoded === null) {
+      return { state: 'error', status: null, message: `refused path ${JSON.stringify(path)}` }
+    }
+    const url = isStatic ? `./data/${encoded}.json` : `/api/${encoded}`
     const response = await fetch(url, { headers })
     if (response.status === 403 && !isStatic) return { state: 'token-rejected' }
     if (!response.ok) {

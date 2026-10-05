@@ -29,17 +29,26 @@ async function renderDiagram(source: string): Promise<void> {
     state.value = { state: 'error', message: 'empty diagram source' }
     return
   }
+  const id = `repoview-mermaid-${String(++nextId)}`
   try {
     const { default: mermaid } = await import('mermaid')
     if (!initialised) {
-      mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' })
+      // suppressErrorRendering: on failure Mermaid throws instead of drawing its own error diagram;
+      // this component shows the error itself.
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        suppressErrorRendering: true,
+      })
       initialised = true
     }
-    const { svg: rendered } = await mermaid.render(`repoview-mermaid-${String(++nextId)}`, source)
+    const { svg: rendered } = await mermaid.render(id, source)
     if (run !== current) return
     svg.value = rendered
     state.value = { state: 'ready' }
   } catch (error) {
+    // Mermaid renders through a temporary `#d<id>` on document.body; a throw can leave it there.
+    document.getElementById(`d${id}`)?.remove()
     if (run !== current) return
     state.value = {
       state: 'error',

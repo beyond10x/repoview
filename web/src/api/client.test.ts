@@ -152,3 +152,37 @@ describe('apiGet in static mode', () => {
     expect(result.state === 'error' && result.message).toContain('offline')
   })
 })
+
+describe('apiGet refuses a path segment that is empty, "." or ".." after decoding', () => {
+  for (const mode of ['server', 'static'] as const) {
+    it(`${mode} mode: answers error and makes no request`, async () => {
+      setMode(mode)
+      const fetchMock = stubFetch(() => json({}))
+      for (const path of [
+        'spec/roots/../ir',
+        'spec/roots/./ir',
+        'spec/roots//ir',
+        'spec/roots/ir/',
+        '/spec',
+        '..',
+        '',
+        'spec/roots/%2e%2e/ir',
+        'spec/roots/%2E/ir',
+        'spec/roots/.%2e/ir',
+      ]) {
+        const result = await apiGet(path)
+        expect(result.state, path).toBe('error')
+        expect(result.state === 'error' && result.status, path).toBeNull()
+        expect(result.state === 'error' && result.message, path).toContain('refused')
+      }
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+  }
+
+  it('still fetches segments that only contain dots among other characters', async () => {
+    setMode('server')
+    const fetchMock = stubFetch(() => json({}))
+    await apiGet('spec/roots/.ess/a..b/...')
+    expect(onlyCall(fetchMock).url).toBe('/api/spec/roots/.ess/a..b/...')
+  })
+})

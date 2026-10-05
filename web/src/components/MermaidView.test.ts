@@ -33,7 +33,11 @@ describe('MermaidView', () => {
     })
     const wrapper = await render(SOURCE)
     expect(mermaid.initialize).toHaveBeenCalledWith(
-      expect.objectContaining({ securityLevel: 'strict', startOnLoad: false }),
+      expect.objectContaining({
+        securityLevel: 'strict',
+        startOnLoad: false,
+        suppressErrorRendering: true,
+      }),
     )
     expect(vi.mocked(mermaid.render).mock.calls[0]?.[1]).toBe(SOURCE)
     expect(wrapper.find('svg[data-test="diagram"]').exists()).toBe(true)
@@ -93,5 +97,19 @@ describe('MermaidView', () => {
       SOURCE,
       'graph TD\n  A --> B',
     ])
+  })
+})
+
+describe('MermaidView after a failed render', () => {
+  it("removes Mermaid's leftover d<id> element from the page", async () => {
+    vi.mocked(mermaid.render).mockImplementation((id: string) => {
+      const leftover = document.createElement('div')
+      leftover.id = `d${id}`
+      document.body.append(leftover)
+      return Promise.reject(new Error('Parse error'))
+    })
+    const wrapper = await render(SOURCE)
+    expect(wrapper.get('pre').text()).toContain('Parse error')
+    expect(document.body.querySelectorAll('[id^="drepoview-mermaid-"]')).toHaveLength(0)
   })
 })
