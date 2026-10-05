@@ -7,7 +7,7 @@ title: 'repoview: one Rust binary, embedded Vue SPA, reading through the owning 
 summary: Local 127.0.0.1 server with a run token; every fact read from git, aep, ess and codegate JSON output with its producer recorded.
 relations:
 - designs: vision:repoview
-revision: 2
+revision: 3
 ---
 ## Decision
 
@@ -107,8 +107,9 @@ panel fills in when it finishes.
 
 ### Server
 
-axum on tokio, bound to `127.0.0.1` with no flag to widen it. Every request must carry the run token
-from the opened URL (query on first load, then a header from the SPA). The server also refuses a
+axum on tokio, bound to `127.0.0.1` with no flag to widen it. Every `/api/*` request must carry the
+run token from the opened URL (query on first load, then the `X-Repoview-Token` header from the SPA);
+static assets carry no project data and need none. The server also refuses a
 `Host` header other than `127.0.0.1:<port>` or `localhost:<port>`, which stops DNS rebinding from
 reading the project through another site. Neither is authentication; both are there now so the
 later write endpoints do not inherit an open read surface.

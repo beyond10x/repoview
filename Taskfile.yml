@@ -1,0 +1,44 @@
+version: '3'
+
+tasks:
+  web:install:
+    dir: web
+    cmds:
+      - pnpm install --frozen-lockfile
+
+  web:build:
+    dir: web
+    deps: [web:install]
+    cmds:
+      - pnpm build
+
+  build:
+    desc: Build the web app, then the release binary with it embedded
+    cmds:
+      - task: web:build
+      - cargo build --locked --release -p repoview
+
+  dev:server:
+    cmds:
+      - cargo run -p repoview -- open --no-browser --port 7480
+
+  dev:web:
+    dir: web
+    deps: [web:install]
+    cmds:
+      - pnpm dev
+
+  dev:
+    desc: Run repoview on port 7480 and the Vite dev server against it
+    deps: [dev:server, dev:web]
+
+  check:
+    desc: The repository gate
+    cmds:
+      - aep plan artifact validate
+      - ess specify validate --path ess
+      - cargo fmt --all -- --check
+      - cargo clippy --workspace --all-targets --locked -- -D warnings
+      - cargo test --workspace --locked
+      - task: web:install
+      - pnpm --dir web check

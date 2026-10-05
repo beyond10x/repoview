@@ -54,14 +54,16 @@ entities:
         type: String
       - name: availability
         type: repoview.project.Availability
+      - name: tool
+        type: Optional<String>
+      - name: tool_path
+        type: Optional<String>
       - name: tool_version
         type: Optional<String>
       - name: diagnostic
         type: Optional<String>
-    # UNMAPPED: the payload of a Present source is the owning tool's own JSON document
-    # (`aep plan artifact list --format json`, `ess specify compile --format json`,
-    # `codegate assess --format json`). Whether ESS references those formats by name or carries
-    # them as Json (ess/15) is open until the shell epic's first story settles the wire model.
+      - name: summary
+        type: Json
     # UNMAPPED: the views the HTTP API answers (snapshot, per-source detail) are not declared yet.
     lifecycle:
       initial: Observed
