@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T13:21:01Z",
+  "actor": "human:timo",
+  "artifact": "story:server-skeleton",
+  "kind": "story",
+  "revision": 12,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "VERIFIED: wave/one d411e1c has no crates/ (baseline cannot serve); impl/server-skeleton serves /api/snapshot with token 200 (preview run on this repository: five sources, git 2.55.0, aep 0.68.0, ess 0.52.0)"
+  }
+}

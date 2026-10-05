@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T13:04:42Z",
+  "actor": "human:timo",
+  "artifact": "story:web-skeleton",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "VERIFIED: wave/one d411e1c has no web/ (baseline cannot render); impl/web-skeleton pnpm check 63/63 and Overview renders five cards against the live server API (http 200 via Vite proxy)"
+  }
+}

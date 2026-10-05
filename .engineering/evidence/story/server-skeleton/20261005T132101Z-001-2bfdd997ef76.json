@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T13:21:01Z",
+  "actor": "human:timo",
+  "artifact": "story:server-skeleton",
+  "kind": "story",
+  "revision": 12,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p repoview -p repoview-sources --locked (coordinator re-run on impl/server-skeleton, own target dir, --list 77): 77 passed, 0 failed; clippy -D warnings exit 0"
+  }
+}

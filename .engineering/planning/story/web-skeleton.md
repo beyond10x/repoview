@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:web-skeleton
 kind: story
-status: active
+status: implemented
 title: 'Vue app: Overview page over the snapshot'
 summary: Vue 3 + Vite SPA rendering one card per source with availability and producer; token moved from URL to sessionStorage.
 relations:
@@ -11,10 +11,11 @@ relations:
 scope:
 - confidence: cited
   path: web/
-revision: 8
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T12:37:44Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":3}}}
 - {from: "proposed", to: "active", at: "2026-10-05T12:37:44Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":3}}}
+- {from: "active", to: "implemented", at: "2026-10-05T13:24:12Z", actor: "human:timo", revision: 10, decided_on: {"recorded":{"test_result":1,"review_outcome":5,"verification":1}}}
 ---
 ## Story
 
@@ -28,8 +29,9 @@ and its summary, with absent, missing and failed sources visibly distinct.
    `vite build`), and the red `vitest` run before the implementation is in the implementor's report.
 2. `pnpm build` writes `web/dist/index.html` and hashed assets under `web/dist/assets/`.
 3. Vitest cases, against fixture snapshots in `web/src/__fixtures__/`:
-   - a snapshot with all five sources `Present` renders five cards, each naming its `tool` and
-     `tool_version`;
+   - a snapshot with all five sources `Present` renders five cards; each names its `tool` and
+     `tool_version`, or "no external tool" where `tool` is `null` (`docs` has no tool, per the wire
+     contract);
    - `Absent` renders "absent", `ToolMissing` renders "tool missing: <tool>", `Failed` renders
      "failed" plus the `diagnostic` text; none of the three renders an empty card or a `0`;
    - a 403 from `/api/snapshot` renders "token rejected — reopen the URL repoview printed";
@@ -67,3 +69,4 @@ Exactly the snapshot shape and token transport in `story:server-skeleton` § Wir
 ## Out of scope
 
 The Rust server (`story:server-skeleton`); Plan, Specs, Quality and Repository pages; live refresh.
+

@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T13:04:42Z",
+  "actor": "human:timo",
+  "artifact": "story:web-skeleton",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cd web && pnpm check (coordinator re-run on impl/web-skeleton): Tests 63 passed (63), exit 0"
+  }
+}

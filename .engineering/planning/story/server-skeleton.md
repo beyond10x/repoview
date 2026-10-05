@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:server-skeleton
 kind: story
-status: active
+status: implemented
 title: 'Rust binary: CLI, token-guarded local server, snapshot of detected sources, embedded SPA'
 summary: repoview open/snapshot/doctor over five detected sources; 127.0.0.1 with token and Host check; rust-embed of web/dist.
 relations:
@@ -19,10 +19,11 @@ scope:
   path: crates/repoview/
 - confidence: cited
   path: rust-toolchain.toml
-revision: 11
+revision: 13
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T12:37:43Z", actor: "human:timo", revision: 10, decided_on: {"recorded":{"review_outcome":6}}}
 - {from: "proposed", to: "active", at: "2026-10-05T12:37:44Z", actor: "human:timo", revision: 11, decided_on: {"recorded":{"review_outcome":6}}}
+- {from: "active", to: "implemented", at: "2026-10-05T13:24:12Z", actor: "human:timo", revision: 13, decided_on: {"recorded":{"test_result":1,"review_outcome":10,"verification":1}}}
 ---
 ## Story
 
@@ -92,7 +93,8 @@ the web app and a token-guarded `/api/snapshot` describing the project's sources
 }
 ```
 
-- Fields follow `repoview.project.Source` in `ess/domains/project.yaml`. `kind` is one of `Vcs`,
+- Fields follow `repoview.project.Source` in `ess/domains/project.yaml`. The ESS `project_root` field
+  (the `via` of `Project.sources`) is not repeated on each source: `project.root` carries it once. `kind` is one of `Vcs`,
   `Planning`, `Specification`, `Quality`, `Documents`; `availability` one of `Present`, `Absent`,
   `ToolMissing`, `Failed`.
 - `source_id` → `kind`: `vcs` → `Vcs`, `plan` → `Planning`, `spec` → `Specification`,
@@ -136,3 +138,4 @@ truncated to 4 KiB.
 Reading AEP, ESS, Codegate or Git beyond detection and the `summary` fields above (later epics);
 wire types generated from `ess/` and the views marker in `ess/domains/project.yaml` (a later
 story); file watching; any write.
+
