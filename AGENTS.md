@@ -4,6 +4,14 @@ One CLI, `repoview`, that serves a read-only browser view of the project in its 
 Git, ESS specifications, the AEP plan, Codegate quality, top-level documents. Rust server, Vue 3
 SPA embedded in the binary. Humans start at [`README.md`](README.md).
 
+## Serves
+
+- **O2 — decisions as data, with evidence.** Specifications, the plan and the quality rating are
+  shown as the tools that own them report them, and every panel names the tool and version that
+  answered.
+- **O6 — self-improvement, built into all of it.** A project's Codegate rating and plan state sit
+  on one page, so a change can be read before and after it lands.
+
 ## Map
 
 | path | what |
