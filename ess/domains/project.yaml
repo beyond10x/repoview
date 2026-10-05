@@ -1,0 +1,69 @@
+domain: repoview.project
+
+summary: >-
+  The read model repoview builds for one project directory: the project itself and every source
+  of facts detected inside it. Facts that belong to another system (AEP artifacts, ESS IR, Codegate
+  assessments, Git objects) are referenced as that system's own documents, never re-modelled here.
+
+types:
+  - name: repoview.project.ProjectRoot
+    kind: newtype
+    of: String
+
+  - name: repoview.project.SourceId
+    kind: newtype
+    of: String
+
+  - name: repoview.project.SourceKind
+    kind: enum
+    variants: [Vcs, Planning, Specification, Quality, Documents]
+
+  - name: repoview.project.Availability
+    kind: enum
+    variants: [Present, Absent, ToolMissing, Failed]
+
+entities:
+  - name: repoview.project.Project
+    identity:
+      name: root
+      type: repoview.project.ProjectRoot
+    fields:
+      - name: name
+        type: String
+    relations:
+      - name: sources
+        kind: owns
+        target: repoview.project.Source
+        cardinality: many
+        via: project_root
+    lifecycle:
+      initial: Observed
+      states: [Observed]
+      terminal: [Observed]
+
+  - name: repoview.project.Source
+    identity:
+      name: source_id
+      type: repoview.project.SourceId
+    fields:
+      - name: project_root
+        type: repoview.project.ProjectRoot
+      - name: kind
+        type: repoview.project.SourceKind
+      - name: location
+        type: String
+      - name: availability
+        type: repoview.project.Availability
+      - name: tool_version
+        type: Optional<String>
+      - name: diagnostic
+        type: Optional<String>
+    # UNMAPPED: the payload of a Present source is the owning tool's own JSON document
+    # (`aep plan artifact list --format json`, `ess specify compile --format json`,
+    # `codegate assess --format json`). Whether ESS references those formats by name or carries
+    # them as Json (ess/15) is open until the shell epic's first story settles the wire model.
+    # UNMAPPED: the views the HTTP API answers (snapshot, per-source detail) are not declared yet.
+    lifecycle:
+      initial: Observed
+      states: [Observed]
+      terminal: [Observed]
