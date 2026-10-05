@@ -1,0 +1,152 @@
+name: Release build
+
+on:
+  push:
+    tags: ['0.*']
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-22.04
+            task-asset: task_linux_amd64.tar.gz
+            task-sha256: a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-22.04-arm
+            task-asset: task_linux_arm64.tar.gz
+            task-sha256: e3ad19101493a0112e1f22ae8ccc54bf03e533b1076a0ca1e6c782a09ad2e588
+          - target: aarch64-apple-darwin
+            runner: macos-14
+            task-asset: task_darwin_arm64.tar.gz
+            task-sha256: 85d2d96c2380b33d7855b07b3f7a20dc7ca0eda999a26efa0fb5f6f32b366cd7
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: '1.98.1'
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        env:
+          PNPM_VERSION: '11.9.0'
+        run: npm install --global "pnpm@$PNPM_VERSION"
+
+      - name: Install go-task
+        env:
+          TASK_VERSION: '3.53.1'
+          TASK_ASSET: ${{ matrix.task-asset }}
+          TASK_SHA256: ${{ matrix.task-sha256 }}
+        run: |
+          set -o pipefail
+          curl --fail --silent --show-error --location --retry 3 --output "$RUNNER_TEMP/task.tar.gz" \
+            "https://github.com/go-task/task/releases/download/v$TASK_VERSION/$TASK_ASSET"
+          echo "$TASK_SHA256  $RUNNER_TEMP/task.tar.gz" | shasum -a 256 --check
+          mkdir -p "$RUNNER_TEMP/bin"
+          tar -xzf "$RUNNER_TEMP/task.tar.gz" -C "$RUNNER_TEMP/bin" task
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Build the web app, then the release binary with it embedded
+        run: |
+          export RUSTFLAGS="--remap-path-prefix=$HOME=/build-home --remap-path-prefix=$GITHUB_WORKSPACE=/repoview"
+          task build
+
+      - name: Smoke-test the binary
+        run: |
+          set -o pipefail
+          bin="$PWD/target/release/repoview"
+          work="$RUNNER_TEMP/smoke"
+          mkdir -p "$work"
+
+          test "$("$bin" --version)" = "repoview $GITHUB_REF_NAME"
+
+          "$bin" snapshot --format json --root . > "$work/snapshot.json"
+          jq --exit-status '[.sources[] | select(.source_id == "vcs" and .availability == "Present")] | length == 1' \
+            "$work/snapshot.json"
+
+          "$bin" open --no-browser --port 0 --root . > "$work/open.out" &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          url=""
+          for _ in $(seq 1 100); do
+            url=$(head -n 1 "$work/open.out")
+            if [ -n "$url" ]; then break; fi
+            sleep 0.1
+          done
+          origin="${url%%/?token=*}"
+          case "$origin" in
+            http://127.0.0.1:*) ;;
+            *) echo "repoview open printed no URL: '$url'" >&2; exit 1 ;;
+          esac
+          curl --silent --show-error --dump-header "$work/headers" --output "$work/index.html" "$origin/"
+          cat "$work/headers"
+          grep -Eq '^HTTP/[0-9.]+ 200' "$work/headers"
+          grep -iq '^content-type: text/html' "$work/headers"
+          grep -q '<meta name="repoview-mode" content="server"' "$work/index.html"
+
+      - name: Package the binary
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          package="repoview-$GITHUB_REF_NAME-$TARGET"
+          mkdir -p "dist/$package"
+          files=(repoview README.md)
+          cp target/release/repoview README.md "dist/$package/"
+          if [ -f LICENSE ]; then
+            cp LICENSE "dist/$package/"
+            files+=(LICENSE)
+          fi
+          tar -czf "dist/$package.tar.gz" -C "dist/$package" "${files[@]}"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: repoview-${{ github.ref_name }}-${{ matrix.target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  checksums:
+    name: SHA256SUMS
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: repoview-${{ github.ref_name }}-*
+          path: dist
+          merge-multiple: true
+
+      - name: Write SHA256SUMS
+        run: |
+          cd dist
+          archives=(*.tar.gz)
+          test "${#archives[@]}" -eq 3
+          sha256sum *.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: repoview-${{ github.ref_name }}-release
+          path: |
+            dist/*.tar.gz
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
