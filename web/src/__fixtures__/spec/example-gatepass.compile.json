@@ -1,0 +1,986 @@
+{
+  "system": "gatepass",
+  "version": 1,
+  "naming": {},
+  "summary": "Visitor passes for a building: who is expected, who is inside, and who has left. Three commands, two of which can be refused for two different reasons, one lifecycle, two projections and no binding — because the one transport this system has is the one its component's own words require, and nothing here reacts to an event.",
+  "domains": {
+    "gatepass.visit": {
+      "name": "gatepass.visit",
+      "naming": {
+        "wire": "visits",
+        "display": "Visits",
+        "summary": "Expecting a visitor, letting them in, and letting them out again."
+      },
+      "types": [
+        "gatepass.visit.Badge",
+        "gatepass.visit.Building",
+        "gatepass.visit.Deposit",
+        "gatepass.visit.EmployeeId",
+        "gatepass.visit.Host",
+        "gatepass.visit.VendorRef",
+        "gatepass.visit.Visit.State",
+        "gatepass.visit.VisitId",
+        "gatepass.visit.VisitorName"
+      ],
+      "entities": ["gatepass.visit.Visit"],
+      "commands": [
+        "gatepass.visit.AdmitVisitor",
+        "gatepass.visit.RegisterVisit",
+        "gatepass.visit.SignOutVisitor"
+      ],
+      "events": [
+        "gatepass.visit.VisitRegistered",
+        "gatepass.visit.VisitorAdmitted",
+        "gatepass.visit.VisitorDeparted"
+      ],
+      "errors": ["gatepass.visit.InvalidVisitLength", "gatepass.visit.VisitStateConflict"],
+      "views": ["gatepass.visit.ExpectedVisits", "gatepass.visit.VisitById"],
+      "actors": ["gatepass.visit.Receptionist", "gatepass.visit.SecurityAuditor"]
+    }
+  },
+  "types": {
+    "gatepass.visit.Badge": {
+      "name": "gatepass.visit.Badge",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "serial",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "printed_at",
+            "type_ref": {
+              "kind": "optional",
+              "of": {
+                "kind": "primitive",
+                "name": "timestamp"
+              }
+            },
+            "naming": {}
+          },
+          {
+            "name": "signature",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "bytes"
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "gatepass.visit.Building": {
+      "name": "gatepass.visit.Building",
+      "body": {
+        "kind": "enum",
+        "variants": ["North", "South", "Annex"]
+      },
+      "naming": {
+        "display": "Building"
+      }
+    },
+    "gatepass.visit.Deposit": {
+      "name": "gatepass.visit.Deposit",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "decimal"
+            },
+            "naming": {}
+          },
+          {
+            "name": "currency",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": ["amount >= 0"]
+      },
+      "naming": {}
+    },
+    "gatepass.visit.EmployeeId": {
+      "name": "gatepass.visit.EmployeeId",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "gatepass.visit.Host": {
+      "name": "gatepass.visit.Host",
+      "body": {
+        "kind": "union",
+        "tag": "kind",
+        "variants": {
+          "contractor": {
+            "kind": "declared",
+            "name": "gatepass.visit.VendorRef"
+          },
+          "employee": {
+            "kind": "declared",
+            "name": "gatepass.visit.EmployeeId"
+          }
+        }
+      },
+      "naming": {}
+    },
+    "gatepass.visit.VendorRef": {
+      "name": "gatepass.visit.VendorRef",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "gatepass.visit.Visit.State": {
+      "name": "gatepass.visit.Visit.State",
+      "body": {
+        "kind": "enum",
+        "variants": ["Departed", "Expected", "OnSite"]
+      },
+      "naming": {}
+    },
+    "gatepass.visit.VisitId": {
+      "name": "gatepass.visit.VisitId",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "uuid"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "gatepass.visit.VisitorName": {
+      "name": "gatepass.visit.VisitorName",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    }
+  },
+  "conversions": [],
+  "entities": {
+    "gatepass.visit.Visit": {
+      "name": "gatepass.visit.Visit",
+      "domain": "gatepass.visit",
+      "identity": {
+        "name": "visit_id",
+        "type_ref": {
+          "kind": "declared",
+          "name": "gatepass.visit.VisitId"
+        },
+        "naming": {}
+      },
+      "fields": [
+        {
+          "name": "visitor",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.VisitorName"
+          },
+          "naming": {}
+        },
+        {
+          "name": "building",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Building"
+          },
+          "naming": {}
+        },
+        {
+          "name": "host",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Host"
+          },
+          "naming": {}
+        },
+        {
+          "name": "expected_minutes",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "integer"
+          },
+          "naming": {}
+        },
+        {
+          "name": "expected_stay",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "duration"
+          },
+          "naming": {}
+        },
+        {
+          "name": "deposit",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Deposit"
+          },
+          "naming": {}
+        },
+        {
+          "name": "escorts",
+          "type_ref": {
+            "kind": "list",
+            "of": {
+              "kind": "declared",
+              "name": "gatepass.visit.VisitorName"
+            }
+          },
+          "naming": {}
+        },
+        {
+          "name": "notes",
+          "type_ref": {
+            "kind": "map",
+            "key": "string",
+            "value": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          },
+          "naming": {}
+        },
+        {
+          "name": "badge",
+          "type_ref": {
+            "kind": "optional",
+            "of": {
+              "kind": "declared",
+              "name": "gatepass.visit.Badge"
+            }
+          },
+          "naming": {}
+        },
+        {
+          "name": "on_watchlist",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "boolean"
+          },
+          "naming": {}
+        }
+      ],
+      "state_type": "gatepass.visit.Visit.State",
+      "lifecycle": {
+        "states": ["Departed", "Expected", "OnSite"],
+        "initial": "Expected",
+        "terminal": ["Departed"],
+        "transitions": [
+          {
+            "name": "arrive",
+            "from": ["Expected"],
+            "to": "OnSite"
+          },
+          {
+            "name": "depart",
+            "from": ["OnSite"],
+            "to": "Departed"
+          }
+        ]
+      },
+      "invariants": ["deposit.amount >= 0", "expected_minutes > 0"],
+      "naming": {}
+    }
+  },
+  "commands": {
+    "gatepass.visit.AdmitVisitor": {
+      "name": "gatepass.visit.AdmitVisitor",
+      "domain": "gatepass.visit",
+      "input": [
+        {
+          "name": "visit_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.VisitId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "badge",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Badge"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "admitted",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "subject": {
+            "entity": "gatepass.visit.Visit",
+            "effect": "moves",
+            "transition": {
+              "name": "arrive",
+              "from": ["Expected"],
+              "to": "OnSite"
+            },
+            "instance": {
+              "from": "supplied",
+              "field": {
+                "name": "visit_id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "gatepass.visit.VisitId"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "default_branch",
+          "emits": ["gatepass.visit.VisitorAdmitted"],
+          "payload": [
+            {
+              "event": "gatepass.visit.VisitorAdmitted",
+              "fields": [
+                {
+                  "target": "visit_id",
+                  "target_type": {
+                    "kind": "declared",
+                    "name": "gatepass.visit.VisitId"
+                  },
+                  "value": {
+                    "kind": "input_field",
+                    "field": "visit_id",
+                    "type_ref": {
+                      "kind": "declared",
+                      "name": "gatepass.visit.VisitId"
+                    }
+                  }
+                },
+                {
+                  "target": "badge",
+                  "target_type": {
+                    "kind": "declared",
+                    "name": "gatepass.visit.Badge"
+                  },
+                  "value": {
+                    "kind": "input_field",
+                    "field": "badge",
+                    "type_ref": {
+                      "kind": "declared",
+                      "name": "gatepass.visit.Badge"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "summary": "The visitor is on site, holding the badge that was printed.",
+          "sets": [
+            {
+              "target": "badge",
+              "target_type": {
+                "kind": "optional",
+                "of": {
+                  "kind": "declared",
+                  "name": "gatepass.visit.Badge"
+                }
+              },
+              "value": {
+                "kind": "input_field",
+                "field": "badge",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "gatepass.visit.Badge"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "wrong-state",
+          "condition": {
+            "kind": "wrong_state"
+          },
+          "test_strategy": "arrange_state",
+          "emits": [],
+          "error": "gatepass.visit.VisitStateConflict",
+          "summary": "The visit is not Expected, so nobody was admitted."
+        }
+      ],
+      "naming": {
+        "wire": "admit-visitor",
+        "display": "Admit the visitor"
+      }
+    },
+    "gatepass.visit.RegisterVisit": {
+      "name": "gatepass.visit.RegisterVisit",
+      "domain": "gatepass.visit",
+      "input": [
+        {
+          "name": "visitor",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.VisitorName"
+          },
+          "naming": {}
+        },
+        {
+          "name": "building",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Building"
+          },
+          "naming": {}
+        },
+        {
+          "name": "host",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Host"
+          },
+          "naming": {}
+        },
+        {
+          "name": "expected_minutes",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "integer"
+          },
+          "naming": {}
+        },
+        {
+          "name": "expected_stay",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "duration"
+          },
+          "naming": {}
+        },
+        {
+          "name": "deposit",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Deposit"
+          },
+          "naming": {}
+        },
+        {
+          "name": "escorts",
+          "type_ref": {
+            "kind": "list",
+            "of": {
+              "kind": "declared",
+              "name": "gatepass.visit.VisitorName"
+            }
+          },
+          "naming": {}
+        },
+        {
+          "name": "notes",
+          "type_ref": {
+            "kind": "map",
+            "key": "string",
+            "value": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          },
+          "naming": {}
+        },
+        {
+          "name": "on_watchlist",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "boolean"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "registered",
+          "condition": {
+            "kind": "when",
+            "predicate": "expected_minutes > 0"
+          },
+          "subject": {
+            "entity": "gatepass.visit.Visit",
+            "effect": "creates",
+            "instance": {
+              "from": "observed",
+              "event": "gatepass.visit.VisitRegistered",
+              "field": {
+                "name": "visit_id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "gatepass.visit.VisitId"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "construct_input",
+          "emits": ["gatepass.visit.VisitRegistered"],
+          "payload": [
+            {
+              "event": "gatepass.visit.VisitRegistered",
+              "fields": [
+                {
+                  "target": "visitor",
+                  "target_type": {
+                    "kind": "declared",
+                    "name": "gatepass.visit.VisitorName"
+                  },
+                  "value": {
+                    "kind": "input_field",
+                    "field": "visitor",
+                    "type_ref": {
+                      "kind": "declared",
+                      "name": "gatepass.visit.VisitorName"
+                    }
+                  }
+                },
+                {
+                  "target": "building",
+                  "target_type": {
+                    "kind": "declared",
+                    "name": "gatepass.visit.Building"
+                  },
+                  "value": {
+                    "kind": "input_field",
+                    "field": "building",
+                    "type_ref": {
+                      "kind": "declared",
+                      "name": "gatepass.visit.Building"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "summary": "The visit is recorded, and the visitor is Expected.",
+          "sets": [
+            {
+              "target": "expected_minutes",
+              "target_type": {
+                "kind": "primitive",
+                "name": "integer"
+              },
+              "value": {
+                "kind": "input_field",
+                "field": "expected_minutes",
+                "type_ref": {
+                  "kind": "primitive",
+                  "name": "integer"
+                }
+              }
+            },
+            {
+              "target": "deposit",
+              "target_type": {
+                "kind": "declared",
+                "name": "gatepass.visit.Deposit"
+              },
+              "value": {
+                "kind": "input_field",
+                "field": "deposit",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "gatepass.visit.Deposit"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "refused",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "test_strategy": "default_branch",
+          "emits": [],
+          "error": "gatepass.visit.InvalidVisitLength",
+          "summary": "The expected length was not positive, and nothing was recorded."
+        }
+      ],
+      "naming": {
+        "wire": "register-visit",
+        "display": "Register a visit"
+      }
+    },
+    "gatepass.visit.SignOutVisitor": {
+      "name": "gatepass.visit.SignOutVisitor",
+      "domain": "gatepass.visit",
+      "input": [
+        {
+          "name": "visit_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.VisitId"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "signed-out",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "subject": {
+            "entity": "gatepass.visit.Visit",
+            "effect": "moves",
+            "transition": {
+              "name": "depart",
+              "from": ["OnSite"],
+              "to": "Departed"
+            },
+            "instance": {
+              "from": "supplied",
+              "field": {
+                "name": "visit_id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "gatepass.visit.VisitId"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "default_branch",
+          "emits": ["gatepass.visit.VisitorDeparted"],
+          "payload": [
+            {
+              "event": "gatepass.visit.VisitorDeparted",
+              "fields": [
+                {
+                  "target": "visit_id",
+                  "target_type": {
+                    "kind": "declared",
+                    "name": "gatepass.visit.VisitId"
+                  },
+                  "value": {
+                    "kind": "input_field",
+                    "field": "visit_id",
+                    "type_ref": {
+                      "kind": "declared",
+                      "name": "gatepass.visit.VisitId"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "summary": "The visitor has left the building."
+        },
+        {
+          "name": "wrong-state",
+          "condition": {
+            "kind": "wrong_state"
+          },
+          "test_strategy": "arrange_state",
+          "emits": [],
+          "error": "gatepass.visit.VisitStateConflict",
+          "summary": "The visit is not OnSite, so nobody was signed out."
+        }
+      ],
+      "naming": {
+        "wire": "sign-out-visitor",
+        "display": "Sign the visitor out"
+      }
+    }
+  },
+  "events": {
+    "gatepass.visit.VisitRegistered": {
+      "name": "gatepass.visit.VisitRegistered",
+      "domain": "gatepass.visit",
+      "fields": [
+        {
+          "name": "visit_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.VisitId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "visitor",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.VisitorName"
+          },
+          "naming": {}
+        },
+        {
+          "name": "building",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Building"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    },
+    "gatepass.visit.VisitorAdmitted": {
+      "name": "gatepass.visit.VisitorAdmitted",
+      "domain": "gatepass.visit",
+      "fields": [
+        {
+          "name": "visit_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.VisitId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "badge",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Badge"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    },
+    "gatepass.visit.VisitorDeparted": {
+      "name": "gatepass.visit.VisitorDeparted",
+      "domain": "gatepass.visit",
+      "fields": [
+        {
+          "name": "visit_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.VisitId"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    }
+  },
+  "errors": {
+    "gatepass.visit.InvalidVisitLength": {
+      "name": "gatepass.visit.InvalidVisitLength",
+      "domain": "gatepass.visit",
+      "summary": "The expected length of the visit is not a positive number of minutes.",
+      "fields": [
+        {
+          "name": "submitted",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "integer"
+          },
+          "naming": {}
+        }
+      ]
+    },
+    "gatepass.visit.VisitStateConflict": {
+      "name": "gatepass.visit.VisitStateConflict",
+      "domain": "gatepass.visit",
+      "summary": "The visit is not in a state this command acts from, so nothing moved.",
+      "fields": [
+        {
+          "name": "state",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Visit.State"
+          },
+          "naming": {}
+        }
+      ]
+    }
+  },
+  "views": {
+    "gatepass.visit.ExpectedVisits": {
+      "name": "gatepass.visit.ExpectedVisits",
+      "domain": "gatepass.visit",
+      "source": "gatepass.visit.Visit",
+      "fields": [
+        {
+          "name": "visit_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.VisitId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "visitor",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.VisitorName"
+          },
+          "naming": {}
+        },
+        {
+          "name": "building",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Building"
+          },
+          "naming": {}
+        },
+        {
+          "name": "deposit",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Deposit"
+          },
+          "naming": {}
+        }
+      ],
+      "filter": "state == Expected",
+      "consistency": "read_your_writes",
+      "assertion_style": "expect",
+      "naming": {
+        "wire": "expected",
+        "display": "Expected visits"
+      }
+    },
+    "gatepass.visit.VisitById": {
+      "name": "gatepass.visit.VisitById",
+      "domain": "gatepass.visit",
+      "source": "gatepass.visit.Visit",
+      "fields": [
+        {
+          "name": "visit_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.VisitId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "visitor",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.VisitorName"
+          },
+          "naming": {}
+        },
+        {
+          "name": "host",
+          "type_ref": {
+            "kind": "declared",
+            "name": "gatepass.visit.Host"
+          },
+          "naming": {}
+        },
+        {
+          "name": "escorts",
+          "type_ref": {
+            "kind": "list",
+            "of": {
+              "kind": "declared",
+              "name": "gatepass.visit.VisitorName"
+            }
+          },
+          "naming": {}
+        },
+        {
+          "name": "notes",
+          "type_ref": {
+            "kind": "map",
+            "key": "string",
+            "value": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          },
+          "naming": {}
+        },
+        {
+          "name": "badge",
+          "type_ref": {
+            "kind": "optional",
+            "of": {
+              "kind": "declared",
+              "name": "gatepass.visit.Badge"
+            }
+          },
+          "naming": {}
+        }
+      ],
+      "consistency": "eventual",
+      "assertion_style": "eventually",
+      "naming": {
+        "wire": "by-id",
+        "display": "Visit by id"
+      }
+    }
+  },
+  "actors": {
+    "gatepass.visit.Receptionist": {
+      "name": "gatepass.visit.Receptionist",
+      "domain": "gatepass.visit",
+      "may": [
+        "gatepass.visit.AdmitVisitor",
+        "gatepass.visit.RegisterVisit",
+        "gatepass.visit.SignOutVisitor"
+      ],
+      "naming": {
+        "display": "Receptionist"
+      }
+    },
+    "gatepass.visit.SecurityAuditor": {
+      "name": "gatepass.visit.SecurityAuditor",
+      "domain": "gatepass.visit",
+      "may": [],
+      "naming": {
+        "display": "Security auditor"
+      }
+    }
+  },
+  "bindings": {},
+  "components": {
+    "pass-service": {
+      "name": "pass-service",
+      "owns": ["gatepass.visit"],
+      "accepts": [
+        "gatepass.visit.AdmitVisitor",
+        "gatepass.visit.RegisterVisit",
+        "gatepass.visit.SignOutVisitor"
+      ],
+      "publishes": [
+        "gatepass.visit.VisitRegistered",
+        "gatepass.visit.VisitorAdmitted",
+        "gatepass.visit.VisitorDeparted"
+      ],
+      "reached_by": "network",
+      "naming": {
+        "summary": "Holds every expected, present and departed visit for one site."
+      }
+    }
+  },
+  "workloads": {}
+}

@@ -1,0 +1,986 @@
+{
+  "system": "oracle",
+  "version": 1,
+  "naming": {},
+  "summary": "Orders handed off to a carrier: the smallest specification that holds the constructs the normative example deliberately does not — all three `on_failure` policies, three bindings so dropping one leaves another to stay green, an outcome that updates an entity without moving it, a filtered view at each consistency level, and an event carrying two fields of one type so a mapping can be swapped rather than invented.",
+  "domains": {
+    "oracle.dispatch": {
+      "name": "oracle.dispatch",
+      "naming": {
+        "summary": "Handing an order to a carrier, which may refuse for reasons no input predicts."
+      },
+      "types": ["oracle.dispatch.HandoffId", "oracle.dispatch.Label", "oracle.dispatch.Recipient"],
+      "entities": [],
+      "commands": ["oracle.dispatch.Handoff"],
+      "events": ["oracle.dispatch.HandedOff", "oracle.dispatch.HandoffEscalated"],
+      "errors": ["oracle.dispatch.NoCapacity"],
+      "views": [],
+      "actors": []
+    },
+    "oracle.order": {
+      "name": "oracle.order",
+      "naming": {
+        "wire": "orders",
+        "display": "Ordering",
+        "summary": "Orders, and the states one passes through on its way out of the building."
+      },
+      "types": ["oracle.order.Email", "oracle.order.Order.State", "oracle.order.OrderId"],
+      "entities": ["oracle.order.Order"],
+      "commands": [
+        "oracle.order.AmendOrder",
+        "oracle.order.CancelOrder",
+        "oracle.order.HoldOrder",
+        "oracle.order.PlaceOrder",
+        "oracle.order.ShipOrder"
+      ],
+      "events": [
+        "oracle.order.OrderAmended",
+        "oracle.order.OrderCancelled",
+        "oracle.order.OrderHeld",
+        "oracle.order.OrderPlaced",
+        "oracle.order.OrderShipped"
+      ],
+      "errors": ["oracle.order.OrderStateConflict", "oracle.order.WeightOutOfRange"],
+      "views": ["oracle.order.HeldOrders", "oracle.order.OpenOrders"],
+      "actors": []
+    }
+  },
+  "types": {
+    "oracle.dispatch.HandoffId": {
+      "name": "oracle.dispatch.HandoffId",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "uuid"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "oracle.dispatch.Label": {
+      "name": "oracle.dispatch.Label",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "oracle.dispatch.Recipient": {
+      "name": "oracle.dispatch.Recipient",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "oracle.order.Email": {
+      "name": "oracle.order.Email",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "oracle.order.Order.State": {
+      "name": "oracle.order.Order.State",
+      "body": {
+        "kind": "enum",
+        "variants": ["Cancelled", "Held", "Placed", "Shipped"]
+      },
+      "naming": {}
+    },
+    "oracle.order.OrderId": {
+      "name": "oracle.order.OrderId",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "uuid"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    }
+  },
+  "conversions": [
+    {
+      "from": {
+        "kind": "declared",
+        "name": "oracle.order.Email"
+      },
+      "to": {
+        "kind": "declared",
+        "name": "oracle.dispatch.Recipient"
+      },
+      "because": "An order's contact address is where the carrier's notice goes; the dispatch context validates it again on the way out, so the order context does not have to know how."
+    }
+  ],
+  "entities": {
+    "oracle.order.Order": {
+      "name": "oracle.order.Order",
+      "domain": "oracle.order",
+      "identity": {
+        "name": "order_id",
+        "type_ref": {
+          "kind": "declared",
+          "name": "oracle.order.OrderId"
+        },
+        "naming": {}
+      },
+      "fields": [
+        {
+          "name": "contact",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.Email"
+          },
+          "naming": {}
+        },
+        {
+          "name": "alternate_contact",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.Email"
+          },
+          "naming": {}
+        },
+        {
+          "name": "weight_grams",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "integer"
+          },
+          "naming": {}
+        }
+      ],
+      "state_type": "oracle.order.Order.State",
+      "lifecycle": {
+        "states": ["Cancelled", "Held", "Placed", "Shipped"],
+        "initial": "Placed",
+        "terminal": ["Cancelled", "Shipped"],
+        "transitions": [
+          {
+            "name": "hold",
+            "from": ["Placed"],
+            "to": "Held"
+          },
+          {
+            "name": "ship",
+            "from": ["Placed"],
+            "to": "Shipped"
+          },
+          {
+            "name": "cancel",
+            "from": ["Held", "Placed"],
+            "to": "Cancelled"
+          }
+        ]
+      },
+      "invariants": ["weight_grams >= 0"],
+      "naming": {}
+    }
+  },
+  "commands": {
+    "oracle.dispatch.Handoff": {
+      "name": "oracle.dispatch.Handoff",
+      "domain": "oracle.dispatch",
+      "input": [
+        {
+          "name": "recipient",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.dispatch.Recipient"
+          },
+          "naming": {}
+        },
+        {
+          "name": "label",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.dispatch.Label"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "accepted",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "test_strategy": "default_branch",
+          "emits": ["oracle.dispatch.HandedOff"],
+          "summary": "The carrier took it."
+        },
+        {
+          "name": "refused",
+          "condition": {
+            "kind": "external",
+            "cause": "the carrier has no capacity for this handoff"
+          },
+          "test_strategy": "inject_fault",
+          "emits": [],
+          "error": "oracle.dispatch.NoCapacity",
+          "summary": "The carrier refused; no input decides this, so a scenario injects it."
+        }
+      ],
+      "naming": {
+        "wire": "handoff",
+        "display": "Hand off"
+      }
+    },
+    "oracle.order.AmendOrder": {
+      "name": "oracle.order.AmendOrder",
+      "domain": "oracle.order",
+      "input": [
+        {
+          "name": "order_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.OrderId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "weight_grams",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "integer"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "amended",
+          "condition": {
+            "kind": "when",
+            "predicate": "weight_grams >= 0"
+          },
+          "subject": {
+            "entity": "oracle.order.Order",
+            "effect": "updates",
+            "instance": {
+              "from": "supplied",
+              "field": {
+                "name": "order_id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "oracle.order.OrderId"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "construct_input",
+          "emits": ["oracle.order.OrderAmended"],
+          "summary": "The recorded weight changes; the order stays where it is."
+        },
+        {
+          "name": "rejected",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "test_strategy": "default_branch",
+          "emits": [],
+          "error": "oracle.order.WeightOutOfRange",
+          "summary": "The weight was negative, so the order was left alone."
+        }
+      ],
+      "naming": {
+        "wire": "amend-order",
+        "display": "Amend order"
+      }
+    },
+    "oracle.order.CancelOrder": {
+      "name": "oracle.order.CancelOrder",
+      "domain": "oracle.order",
+      "input": [
+        {
+          "name": "order_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.OrderId"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "cancelled",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "subject": {
+            "entity": "oracle.order.Order",
+            "effect": "moves",
+            "transition": {
+              "name": "cancel",
+              "from": ["Held", "Placed"],
+              "to": "Cancelled"
+            },
+            "instance": {
+              "from": "supplied",
+              "field": {
+                "name": "order_id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "oracle.order.OrderId"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "default_branch",
+          "emits": ["oracle.order.OrderCancelled"],
+          "summary": "The order is cancelled, from Placed or from Held — never from Shipped."
+        },
+        {
+          "name": "wrong-state",
+          "condition": {
+            "kind": "wrong_state"
+          },
+          "test_strategy": "arrange_state",
+          "emits": [],
+          "error": "oracle.order.OrderStateConflict",
+          "summary": "The order has shipped or is already cancelled, so nothing was cancelled."
+        }
+      ],
+      "naming": {
+        "wire": "cancel-order",
+        "display": "Cancel order"
+      }
+    },
+    "oracle.order.HoldOrder": {
+      "name": "oracle.order.HoldOrder",
+      "domain": "oracle.order",
+      "input": [
+        {
+          "name": "order_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.OrderId"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "held",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "subject": {
+            "entity": "oracle.order.Order",
+            "effect": "moves",
+            "transition": {
+              "name": "hold",
+              "from": ["Placed"],
+              "to": "Held"
+            },
+            "instance": {
+              "from": "supplied",
+              "field": {
+                "name": "order_id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "oracle.order.OrderId"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "default_branch",
+          "emits": ["oracle.order.OrderHeld"],
+          "summary": "The order is held for review."
+        },
+        {
+          "name": "wrong-state",
+          "condition": {
+            "kind": "wrong_state"
+          },
+          "test_strategy": "arrange_state",
+          "emits": [],
+          "error": "oracle.order.OrderStateConflict",
+          "summary": "The order is not Placed, so it was not held."
+        }
+      ],
+      "naming": {
+        "wire": "hold-order",
+        "display": "Hold order"
+      }
+    },
+    "oracle.order.PlaceOrder": {
+      "name": "oracle.order.PlaceOrder",
+      "domain": "oracle.order",
+      "input": [
+        {
+          "name": "contact",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.Email"
+          },
+          "naming": {}
+        },
+        {
+          "name": "alternate_contact",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.Email"
+          },
+          "naming": {}
+        },
+        {
+          "name": "weight_grams",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "integer"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "accepted",
+          "condition": {
+            "kind": "when",
+            "predicate": "weight_grams >= 0"
+          },
+          "subject": {
+            "entity": "oracle.order.Order",
+            "effect": "creates",
+            "instance": {
+              "from": "observed",
+              "event": "oracle.order.OrderPlaced",
+              "field": {
+                "name": "order_id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "oracle.order.OrderId"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "construct_input",
+          "emits": ["oracle.order.OrderPlaced"],
+          "summary": "The order is recorded, in Placed.",
+          "sets": [
+            {
+              "target": "weight_grams",
+              "target_type": {
+                "kind": "primitive",
+                "name": "integer"
+              },
+              "value": {
+                "kind": "input_field",
+                "field": "weight_grams",
+                "type_ref": {
+                  "kind": "primitive",
+                  "name": "integer"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "rejected",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "test_strategy": "default_branch",
+          "emits": [],
+          "error": "oracle.order.WeightOutOfRange",
+          "summary": "The weight was negative, and nothing was recorded."
+        }
+      ],
+      "naming": {
+        "wire": "place-order",
+        "display": "Place order"
+      }
+    },
+    "oracle.order.ShipOrder": {
+      "name": "oracle.order.ShipOrder",
+      "domain": "oracle.order",
+      "input": [
+        {
+          "name": "order_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.OrderId"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "shipped",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "subject": {
+            "entity": "oracle.order.Order",
+            "effect": "moves",
+            "transition": {
+              "name": "ship",
+              "from": ["Placed"],
+              "to": "Shipped"
+            },
+            "instance": {
+              "from": "supplied",
+              "field": {
+                "name": "order_id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "oracle.order.OrderId"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "default_branch",
+          "emits": ["oracle.order.OrderShipped"],
+          "summary": "The order leaves the building, and is terminal."
+        },
+        {
+          "name": "wrong-state",
+          "condition": {
+            "kind": "wrong_state"
+          },
+          "test_strategy": "arrange_state",
+          "emits": [],
+          "error": "oracle.order.OrderStateConflict",
+          "summary": "The order is not Placed, so it was not shipped."
+        }
+      ],
+      "naming": {
+        "wire": "ship-order",
+        "display": "Ship order"
+      }
+    }
+  },
+  "events": {
+    "oracle.dispatch.HandedOff": {
+      "name": "oracle.dispatch.HandedOff",
+      "domain": "oracle.dispatch",
+      "fields": [
+        {
+          "name": "handoff_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.dispatch.HandoffId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "recipient",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.dispatch.Recipient"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    },
+    "oracle.dispatch.HandoffEscalated": {
+      "name": "oracle.dispatch.HandoffEscalated",
+      "domain": "oracle.dispatch",
+      "fields": [
+        {
+          "name": "recipient",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.dispatch.Recipient"
+          },
+          "naming": {}
+        },
+        {
+          "name": "label",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.dispatch.Label"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {
+        "display": "Handoff escalated",
+        "summary": "The carrier kept refusing and a person was told."
+      }
+    },
+    "oracle.order.OrderAmended": {
+      "name": "oracle.order.OrderAmended",
+      "domain": "oracle.order",
+      "fields": [
+        {
+          "name": "order_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.OrderId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "weight_grams",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "integer"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    },
+    "oracle.order.OrderCancelled": {
+      "name": "oracle.order.OrderCancelled",
+      "domain": "oracle.order",
+      "fields": [
+        {
+          "name": "order_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.OrderId"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    },
+    "oracle.order.OrderHeld": {
+      "name": "oracle.order.OrderHeld",
+      "domain": "oracle.order",
+      "fields": [
+        {
+          "name": "order_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.OrderId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "contact",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.Email"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    },
+    "oracle.order.OrderPlaced": {
+      "name": "oracle.order.OrderPlaced",
+      "domain": "oracle.order",
+      "fields": [
+        {
+          "name": "order_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.OrderId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "contact",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.Email"
+          },
+          "naming": {}
+        },
+        {
+          "name": "alternate_contact",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.Email"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    },
+    "oracle.order.OrderShipped": {
+      "name": "oracle.order.OrderShipped",
+      "domain": "oracle.order",
+      "fields": [
+        {
+          "name": "order_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.OrderId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "contact",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.Email"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    }
+  },
+  "errors": {
+    "oracle.dispatch.NoCapacity": {
+      "name": "oracle.dispatch.NoCapacity",
+      "domain": "oracle.dispatch",
+      "summary": "The carrier had no capacity for this handoff.",
+      "fields": []
+    },
+    "oracle.order.OrderStateConflict": {
+      "name": "oracle.order.OrderStateConflict",
+      "domain": "oracle.order",
+      "summary": "The order is not in a state this command acts from.",
+      "fields": []
+    },
+    "oracle.order.WeightOutOfRange": {
+      "name": "oracle.order.WeightOutOfRange",
+      "domain": "oracle.order",
+      "summary": "The weight was negative, so nothing was recorded.",
+      "fields": [
+        {
+          "name": "submitted",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "integer"
+          },
+          "naming": {}
+        }
+      ]
+    }
+  },
+  "views": {
+    "oracle.order.HeldOrders": {
+      "name": "oracle.order.HeldOrders",
+      "domain": "oracle.order",
+      "source": "oracle.order.Order",
+      "fields": [
+        {
+          "name": "order_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.OrderId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "contact",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.Email"
+          },
+          "naming": {}
+        }
+      ],
+      "filter": "state == Held",
+      "consistency": "eventual",
+      "assertion_style": "eventually",
+      "naming": {
+        "wire": "held",
+        "display": "Held orders"
+      }
+    },
+    "oracle.order.OpenOrders": {
+      "name": "oracle.order.OpenOrders",
+      "domain": "oracle.order",
+      "source": "oracle.order.Order",
+      "fields": [
+        {
+          "name": "order_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.OrderId"
+          },
+          "naming": {}
+        },
+        {
+          "name": "contact",
+          "type_ref": {
+            "kind": "declared",
+            "name": "oracle.order.Email"
+          },
+          "naming": {}
+        }
+      ],
+      "filter": "state == Placed",
+      "consistency": "read_your_writes",
+      "assertion_style": "expect",
+      "naming": {
+        "wire": "open",
+        "display": "Open orders"
+      }
+    }
+  },
+  "actors": {},
+  "bindings": {
+    "handoff-on-held": {
+      "name": "handoff-on-held",
+      "event": "oracle.order.OrderHeld",
+      "command": "oracle.dispatch.Handoff",
+      "mapping": [
+        {
+          "target": "recipient",
+          "target_type": {
+            "kind": "declared",
+            "name": "oracle.dispatch.Recipient"
+          },
+          "value": {
+            "kind": "event_field",
+            "field": "contact",
+            "type_ref": {
+              "kind": "declared",
+              "name": "oracle.order.Email"
+            }
+          },
+          "conversion": "An order's contact address is where the carrier's notice goes; the dispatch context validates it again on the way out, so the order context does not have to know how."
+        },
+        {
+          "target": "label",
+          "target_type": {
+            "kind": "declared",
+            "name": "oracle.dispatch.Label"
+          },
+          "value": {
+            "kind": "literal",
+            "value": "held"
+          }
+        }
+      ],
+      "delivery": "at_least_once",
+      "failure": "escalate",
+      "escalation": "oracle.dispatch.HandoffEscalated",
+      "naming": {
+        "summary": "Tell the carrier a held order is not coming yet."
+      }
+    },
+    "handoff-on-placed": {
+      "name": "handoff-on-placed",
+      "event": "oracle.order.OrderPlaced",
+      "command": "oracle.dispatch.Handoff",
+      "mapping": [
+        {
+          "target": "recipient",
+          "target_type": {
+            "kind": "declared",
+            "name": "oracle.dispatch.Recipient"
+          },
+          "value": {
+            "kind": "event_field",
+            "field": "contact",
+            "type_ref": {
+              "kind": "declared",
+              "name": "oracle.order.Email"
+            }
+          },
+          "conversion": "An order's contact address is where the carrier's notice goes; the dispatch context validates it again on the way out, so the order context does not have to know how."
+        },
+        {
+          "target": "label",
+          "target_type": {
+            "kind": "declared",
+            "name": "oracle.dispatch.Label"
+          },
+          "value": {
+            "kind": "literal",
+            "value": "placed"
+          }
+        }
+      ],
+      "delivery": "at_least_once",
+      "failure": "retry",
+      "naming": {
+        "summary": "Ask the carrier to collect a new order."
+      }
+    },
+    "handoff-on-shipped": {
+      "name": "handoff-on-shipped",
+      "event": "oracle.order.OrderShipped",
+      "command": "oracle.dispatch.Handoff",
+      "mapping": [
+        {
+          "target": "recipient",
+          "target_type": {
+            "kind": "declared",
+            "name": "oracle.dispatch.Recipient"
+          },
+          "value": {
+            "kind": "event_field",
+            "field": "contact",
+            "type_ref": {
+              "kind": "declared",
+              "name": "oracle.order.Email"
+            }
+          },
+          "conversion": "An order's contact address is where the carrier's notice goes; the dispatch context validates it again on the way out, so the order context does not have to know how."
+        },
+        {
+          "target": "label",
+          "target_type": {
+            "kind": "declared",
+            "name": "oracle.dispatch.Label"
+          },
+          "value": {
+            "kind": "literal",
+            "value": "shipped"
+          }
+        }
+      ],
+      "delivery": "at_least_once",
+      "failure": "drop",
+      "naming": {
+        "summary": "Confirm the handoff of an order that has shipped."
+      }
+    }
+  },
+  "components": {
+    "dispatch-service": {
+      "name": "dispatch-service",
+      "owns": ["oracle.dispatch"],
+      "accepts": ["oracle.dispatch.Handoff"],
+      "publishes": ["oracle.dispatch.HandedOff", "oracle.dispatch.HandoffEscalated"],
+      "naming": {
+        "summary": "Hands orders to a carrier."
+      }
+    },
+    "order-service": {
+      "name": "order-service",
+      "owns": ["oracle.order"],
+      "accepts": [
+        "oracle.order.AmendOrder",
+        "oracle.order.CancelOrder",
+        "oracle.order.HoldOrder",
+        "oracle.order.PlaceOrder",
+        "oracle.order.ShipOrder"
+      ],
+      "publishes": [
+        "oracle.order.OrderAmended",
+        "oracle.order.OrderCancelled",
+        "oracle.order.OrderHeld",
+        "oracle.order.OrderPlaced",
+        "oracle.order.OrderShipped"
+      ],
+      "naming": {
+        "summary": "Records orders and moves them through their lifecycle."
+      }
+    }
+  },
+  "workloads": {}
+}

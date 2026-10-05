@@ -84,6 +84,12 @@ struct Found {
     truncated: bool,
 }
 
+/// The specification roots the `spec` source detects, relative to the project root (`.` for the
+/// root itself), in order. Runs no `ess`: `git ls-files` inside Git, a bounded walk outside it.
+pub fn detected_roots(env: &Env) -> Vec<String> {
+    roots(env, LIMITS).roots
+}
+
 fn roots(env: &Env, limits: Limits) -> Found {
     let Some(files) = git_files(env) else {
         return walk(&env.root, limits);

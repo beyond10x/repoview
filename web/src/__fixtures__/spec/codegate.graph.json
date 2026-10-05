@@ -1,0 +1,19 @@
+{
+  "system": "codegate",
+  "version": "v1",
+  "groups": [
+    {
+      "kind": "unowned",
+      "label": "owned by no component",
+      "members": ["codegate.dependency.Evaluate"]
+    }
+  ],
+  "nodes": [
+    {
+      "kind": "command",
+      "name": "codegate.dependency.Evaluate",
+      "domain": "codegate.dependency"
+    }
+  ],
+  "edges": []
+}

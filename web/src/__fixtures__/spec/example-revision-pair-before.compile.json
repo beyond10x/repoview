@@ -1,0 +1,469 @@
+{
+  "system": "catalog",
+  "version": 2,
+  "naming": {},
+  "summary": "Price lists and who may change them. The smallest specification that carries one of each construct ESS wave 5's first slice compares — a system, types, events, errors, actors and a component — and nothing it does not.",
+  "domains": {
+    "catalog.pricing": {
+      "name": "catalog.pricing",
+      "naming": {
+        "wire": "pricing",
+        "display": "Pricing",
+        "summary": "Publishing price lists and retiring them."
+      },
+      "types": [
+        "catalog.pricing.Currency",
+        "catalog.pricing.Headline",
+        "catalog.pricing.Money",
+        "catalog.pricing.PriceList.State",
+        "catalog.pricing.PriceListId"
+      ],
+      "entities": ["catalog.pricing.PriceList"],
+      "commands": [
+        "catalog.pricing.CreatePriceList",
+        "catalog.pricing.PublishPriceList",
+        "catalog.pricing.RetirePriceList"
+      ],
+      "events": [
+        "catalog.pricing.PriceListCreated",
+        "catalog.pricing.PriceListPublished",
+        "catalog.pricing.PriceListRetired"
+      ],
+      "errors": ["catalog.pricing.InvalidPrice", "catalog.pricing.PriceListStateConflict"],
+      "views": [],
+      "actors": ["catalog.pricing.Auditor", "catalog.pricing.PricingManager"]
+    }
+  },
+  "types": {
+    "catalog.pricing.Currency": {
+      "name": "catalog.pricing.Currency",
+      "body": {
+        "kind": "enum",
+        "variants": ["EUR", "USD", "GBP"]
+      },
+      "naming": {}
+    },
+    "catalog.pricing.Headline": {
+      "name": "catalog.pricing.Headline",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "declared",
+          "name": "catalog.pricing.Money"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "catalog.pricing.Money": {
+      "name": "catalog.pricing.Money",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "amount",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "decimal"
+            },
+            "naming": {}
+          },
+          {
+            "name": "currency",
+            "type_ref": {
+              "kind": "declared",
+              "name": "catalog.pricing.Currency"
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": ["amount >= 0"]
+      },
+      "naming": {}
+    },
+    "catalog.pricing.PriceList.State": {
+      "name": "catalog.pricing.PriceList.State",
+      "body": {
+        "kind": "enum",
+        "variants": ["Draft", "Published", "Retired"]
+      },
+      "naming": {}
+    },
+    "catalog.pricing.PriceListId": {
+      "name": "catalog.pricing.PriceListId",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "uuid"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    }
+  },
+  "conversions": [],
+  "entities": {
+    "catalog.pricing.PriceList": {
+      "name": "catalog.pricing.PriceList",
+      "domain": "catalog.pricing",
+      "identity": {
+        "name": "price_list_id",
+        "type_ref": {
+          "kind": "declared",
+          "name": "catalog.pricing.PriceListId"
+        },
+        "naming": {}
+      },
+      "fields": [
+        {
+          "name": "headline",
+          "type_ref": {
+            "kind": "declared",
+            "name": "catalog.pricing.Headline"
+          },
+          "naming": {}
+        },
+        {
+          "name": "floor",
+          "type_ref": {
+            "kind": "declared",
+            "name": "catalog.pricing.Money"
+          },
+          "naming": {}
+        }
+      ],
+      "state_type": "catalog.pricing.PriceList.State",
+      "lifecycle": {
+        "states": ["Draft", "Published", "Retired"],
+        "initial": "Draft",
+        "terminal": ["Retired"],
+        "transitions": [
+          {
+            "name": "publish",
+            "from": ["Draft"],
+            "to": "Published"
+          },
+          {
+            "name": "retire",
+            "from": ["Published"],
+            "to": "Retired"
+          }
+        ]
+      },
+      "invariants": ["floor.amount >= 0"],
+      "naming": {}
+    }
+  },
+  "commands": {
+    "catalog.pricing.CreatePriceList": {
+      "name": "catalog.pricing.CreatePriceList",
+      "domain": "catalog.pricing",
+      "input": [
+        {
+          "name": "headline",
+          "type_ref": {
+            "kind": "declared",
+            "name": "catalog.pricing.Headline"
+          },
+          "naming": {}
+        },
+        {
+          "name": "floor",
+          "type_ref": {
+            "kind": "declared",
+            "name": "catalog.pricing.Money"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "created",
+          "condition": {
+            "kind": "when",
+            "predicate": "floor.amount > 0"
+          },
+          "subject": {
+            "entity": "catalog.pricing.PriceList",
+            "effect": "creates",
+            "instance": {
+              "from": "observed",
+              "event": "catalog.pricing.PriceListCreated",
+              "field": {
+                "name": "price_list_id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "catalog.pricing.PriceListId"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "construct_input",
+          "emits": ["catalog.pricing.PriceListCreated"],
+          "summary": "The price list is created in Draft, at the headline price it was given.",
+          "sets": [
+            {
+              "target": "floor",
+              "target_type": {
+                "kind": "declared",
+                "name": "catalog.pricing.Money"
+              },
+              "value": {
+                "kind": "input_field",
+                "field": "floor",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "catalog.pricing.Money"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "rejected",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "test_strategy": "default_branch",
+          "emits": [],
+          "error": "catalog.pricing.InvalidPrice",
+          "summary": "The floor price was not positive, and nothing was created."
+        }
+      ],
+      "naming": {}
+    },
+    "catalog.pricing.PublishPriceList": {
+      "name": "catalog.pricing.PublishPriceList",
+      "domain": "catalog.pricing",
+      "input": [
+        {
+          "name": "price_list_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "catalog.pricing.PriceListId"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "published",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "subject": {
+            "entity": "catalog.pricing.PriceList",
+            "effect": "moves",
+            "transition": {
+              "name": "publish",
+              "from": ["Draft"],
+              "to": "Published"
+            },
+            "instance": {
+              "from": "supplied",
+              "field": {
+                "name": "price_list_id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "catalog.pricing.PriceListId"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "default_branch",
+          "emits": ["catalog.pricing.PriceListPublished"],
+          "summary": "The price list leaves Draft and is now Published."
+        },
+        {
+          "name": "wrong-state",
+          "condition": {
+            "kind": "wrong_state"
+          },
+          "test_strategy": "arrange_state",
+          "emits": [],
+          "error": "catalog.pricing.PriceListStateConflict",
+          "summary": "The price list is not in Draft, so it was not published."
+        }
+      ],
+      "naming": {}
+    },
+    "catalog.pricing.RetirePriceList": {
+      "name": "catalog.pricing.RetirePriceList",
+      "domain": "catalog.pricing",
+      "input": [
+        {
+          "name": "price_list_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "catalog.pricing.PriceListId"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "retired",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "subject": {
+            "entity": "catalog.pricing.PriceList",
+            "effect": "moves",
+            "transition": {
+              "name": "retire",
+              "from": ["Published"],
+              "to": "Retired"
+            },
+            "instance": {
+              "from": "supplied",
+              "field": {
+                "name": "price_list_id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "catalog.pricing.PriceListId"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "default_branch",
+          "emits": ["catalog.pricing.PriceListRetired"],
+          "summary": "The price list is withdrawn from sale."
+        },
+        {
+          "name": "wrong-state",
+          "condition": {
+            "kind": "wrong_state"
+          },
+          "test_strategy": "arrange_state",
+          "emits": [],
+          "error": "catalog.pricing.PriceListStateConflict",
+          "summary": "The price list is not Published, so it was not retired."
+        }
+      ],
+      "naming": {}
+    }
+  },
+  "events": {
+    "catalog.pricing.PriceListCreated": {
+      "name": "catalog.pricing.PriceListCreated",
+      "domain": "catalog.pricing",
+      "fields": [
+        {
+          "name": "price_list_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "catalog.pricing.PriceListId"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    },
+    "catalog.pricing.PriceListPublished": {
+      "name": "catalog.pricing.PriceListPublished",
+      "domain": "catalog.pricing",
+      "fields": [
+        {
+          "name": "price_list_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "catalog.pricing.PriceListId"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    },
+    "catalog.pricing.PriceListRetired": {
+      "name": "catalog.pricing.PriceListRetired",
+      "domain": "catalog.pricing",
+      "fields": [
+        {
+          "name": "price_list_id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "catalog.pricing.PriceListId"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    }
+  },
+  "errors": {
+    "catalog.pricing.InvalidPrice": {
+      "name": "catalog.pricing.InvalidPrice",
+      "domain": "catalog.pricing",
+      "summary": "The floor price is not one a price list may carry.",
+      "fields": [
+        {
+          "name": "submitted",
+          "type_ref": {
+            "kind": "declared",
+            "name": "catalog.pricing.Money"
+          },
+          "naming": {}
+        }
+      ]
+    },
+    "catalog.pricing.PriceListStateConflict": {
+      "name": "catalog.pricing.PriceListStateConflict",
+      "domain": "catalog.pricing",
+      "summary": "The price list is not in a state this command acts from, so nothing moved.",
+      "fields": [
+        {
+          "name": "state",
+          "type_ref": {
+            "kind": "declared",
+            "name": "catalog.pricing.PriceList.State"
+          },
+          "naming": {}
+        }
+      ]
+    }
+  },
+  "views": {},
+  "actors": {
+    "catalog.pricing.Auditor": {
+      "name": "catalog.pricing.Auditor",
+      "domain": "catalog.pricing",
+      "may": ["catalog.pricing.RetirePriceList"],
+      "naming": {
+        "display": "Auditor"
+      }
+    },
+    "catalog.pricing.PricingManager": {
+      "name": "catalog.pricing.PricingManager",
+      "domain": "catalog.pricing",
+      "may": ["catalog.pricing.CreatePriceList", "catalog.pricing.PublishPriceList"],
+      "naming": {
+        "display": "Pricing manager"
+      }
+    }
+  },
+  "bindings": {},
+  "components": {
+    "pricing-service": {
+      "name": "pricing-service",
+      "owns": ["catalog.pricing"],
+      "accepts": [
+        "catalog.pricing.CreatePriceList",
+        "catalog.pricing.PublishPriceList",
+        "catalog.pricing.RetirePriceList"
+      ],
+      "publishes": [
+        "catalog.pricing.PriceListCreated",
+        "catalog.pricing.PriceListPublished",
+        "catalog.pricing.PriceListRetired"
+      ],
+      "naming": {
+        "summary": "Owns price lists and the commands that move them."
+      }
+    }
+  },
+  "workloads": {}
+}

@@ -1,0 +1,11 @@
+{
+  "valid": true,
+  "system": "billing",
+  "version": "v3",
+  "files_read": 5,
+  "domains": 2,
+  "commands": 5,
+  "events": 6,
+  "components": 2,
+  "unresolved_references": []
+}

@@ -1,0 +1,29 @@
+{
+  "compiled": false,
+  "files_read": 5,
+  "problems": [
+    "[undeclared_reference] entity billing.invoice.Account.relations.invoices: relation `invoices` of `billing.invoice.Account` targets `billing.invoice.Nope`, which is not a declared entity (hint: declared entities: billing.invoice.Account, billing.invoice.Invoice)"
+  ],
+  "diagnostics": [
+    {
+      "code": "ESS-ENTITY-001",
+      "severity": "error",
+      "message": "relation `invoices` of `billing.invoice.Account` targets `billing.invoice.Nope`, which is not a declared entity",
+      "details": [
+        {
+          "kind": "note",
+          "text": "`ess-domain` refuses this as `undeclared_reference`"
+        }
+      ],
+      "hint": "declared entities: billing.invoice.Account, billing.invoice.Invoice",
+      "span": {
+        "source": "domains/invoice.yaml",
+        "path": "entity billing.invoice.Account.relations.invoices",
+        "located": {
+          "line": 69,
+          "column": 5
+        }
+      }
+    }
+  ]
+}
