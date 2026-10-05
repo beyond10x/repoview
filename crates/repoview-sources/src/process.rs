@@ -5,7 +5,7 @@ use std::io::Read;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -42,14 +42,66 @@ pub fn find_tool(path: Option<&OsStr>, name: &str) -> Option<PathBuf> {
         })
 }
 
-/// Run `program args…` in `env.root` with `env`'s `PATH`.
+/// Everything one tool invocation produced, whatever its exit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Output {
+    /// The exit code; `None` when a signal ended the tool, it timed out or it did not start.
+    pub exit: Option<i32>,
+    /// The tool's stdout, byte for byte; empty when it timed out or did not start.
+    pub stdout: Vec<u8>,
+    /// The tool's stderr in full; when it timed out or did not start, repoview's diagnostic
+    /// instead, already cut to [`DIAGNOSTIC_LIMIT`].
+    pub stderr: String,
+    /// The deadline passed and the tool's process group was killed.
+    pub timed_out: bool,
+    /// How the tool ended; `None` exactly when it timed out or did not start.
+    pub status: Option<ExitStatus>,
+}
+
+impl Output {
+    /// A run that never reached an exit: a timeout or a spawn error.
+    fn unfinished(diagnostic: &str, timed_out: bool) -> Self {
+        Output {
+            exit: None,
+            stdout: Vec::new(),
+            stderr: truncate_diagnostic(diagnostic),
+            timed_out,
+            status: None,
+        }
+    }
+}
+
+/// Run `program args…` in `env.root` with `env`'s `PATH`: [`run_output`], read as success or
+/// failure.
+///
+/// Exit status 0 is [`Outcome::Success`] with stdout. Anything else is [`Outcome::Failure`]: the
+/// tool's stderr, or `<program> exited with <status>` when stderr is blank, or the timeout or
+/// spawn diagnostic.
+pub fn run(env: &Env, program: &Path, args: &[&str], timeout: Duration) -> Outcome {
+    let output = run_output(env, program, args, timeout);
+    match output.status {
+        None => Outcome::Failure {
+            diagnostic: output.stderr,
+        },
+        Some(status) if status.success() => Outcome::Success {
+            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        },
+        Some(status) if output.stderr.trim().is_empty() => {
+            failure(&format!("{} exited with {status}", program.display()))
+        }
+        Some(_) => failure(&output.stderr),
+    }
+}
+
+/// Run `program args…` in `env.root` with `env`'s `PATH`, no shell, stdin closed, and keep the
+/// exit code and both streams whatever the exit.
 ///
 /// `timeout` bounds the whole run, output included: the child leads its own process group, and
-/// at the deadline the group is killed, so a background grandchild holding a pipe open cannot
+/// at the one deadline the group is killed, so a background grandchild holding a pipe open cannot
 /// keep the call waiting. Every child runs with `GIT_OPTIONAL_LOCKS=0` and, through
 /// `GIT_CONFIG_COUNT`, `core.fsmonitor=false` and `core.untrackedCache=false`, so no `git`
 /// invocation rewrites the index, starts an fsmonitor daemon or writes a cache into `.git`.
-pub fn run(env: &Env, program: &Path, args: &[&str], timeout: Duration) -> Outcome {
+pub fn run_output(env: &Env, program: &Path, args: &[&str], timeout: Duration) -> Output {
     let deadline = Instant::now() + timeout;
     let mut command = Command::new(program);
     command
@@ -68,20 +120,26 @@ pub fn run(env: &Env, program: &Path, args: &[&str], timeout: Duration) -> Outco
     if let Some(path) = &env.path {
         command.env("PATH", path);
     }
+    let os_error = |error: &dyn std::fmt::Display| {
+        Output::unfinished(&format!("{}: {error}", program.display()), false)
+    };
     let mut child = match command.spawn() {
         Ok(child) => child,
-        Err(error) => return failure(&format!("{}: {error}", program.display())),
+        Err(error) => return os_error(&error),
     };
     let group = child.id();
     let stdout = drain(child.stdout.take());
     let stderr = drain(child.stderr.take());
     let timed_out = || {
         kill_group(group);
-        failure(&format!(
-            "{} timed out after {} ms",
-            program.display(),
-            timeout.as_millis()
-        ))
+        Output::unfinished(
+            &format!(
+                "{} timed out after {} ms",
+                program.display(),
+                timeout.as_millis()
+            ),
+            true,
+        )
     };
     let status = match child.wait_timeout(remaining(deadline)) {
         Ok(Some(status)) => status,
@@ -93,7 +151,7 @@ pub fn run(env: &Env, program: &Path, args: &[&str], timeout: Duration) -> Outco
         Err(error) => {
             kill_group(group);
             let _ = child.wait();
-            return failure(&format!("{}: {error}", program.display()));
+            return os_error(&error);
         }
     };
     let (Ok(stdout), Ok(stderr)) = (
@@ -102,12 +160,12 @@ pub fn run(env: &Env, program: &Path, args: &[&str], timeout: Duration) -> Outco
     ) else {
         return timed_out();
     };
-    if status.success() {
-        Outcome::Success { stdout }
-    } else if stderr.trim().is_empty() {
-        failure(&format!("{} exited with {status}", program.display()))
-    } else {
-        failure(&stderr)
+    Output {
+        exit: status.code(),
+        stdout,
+        stderr: String::from_utf8_lossy(&stderr).into_owned(),
+        timed_out: false,
+        status: Some(status),
     }
 }
 
@@ -125,15 +183,15 @@ fn kill_group(group: u32) {
     }
 }
 
-/// Read `pipe` to its end on a thread; the text arrives on the returned channel.
-fn drain(pipe: Option<impl Read + Send + 'static>) -> Receiver<String> {
+/// Read `pipe` to its end on a thread; the bytes arrive on the returned channel.
+fn drain(pipe: Option<impl Read + Send + 'static>) -> Receiver<Vec<u8>> {
     let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {
         let mut bytes = Vec::new();
         if let Some(mut pipe) = pipe {
             let _ = pipe.read_to_end(&mut bytes);
         }
-        let _ = sender.send(String::from_utf8_lossy(&bytes).into_owned());
+        let _ = sender.send(bytes);
     });
     receiver
 }

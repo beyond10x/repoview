@@ -14,20 +14,12 @@
 //! The project comes from an [`Env`] request extension; `repoview open` layers it over the router
 //! (`axum::Extension(Env)`); a test adds its own.
 
-use std::io::Read;
-use std::os::unix::process::CommandExt;
-use std::path::Path;
-use std::process::{Command, Stdio};
-use std::sync::mpsc::{self, Receiver};
-use std::thread;
-use std::time::{Duration, Instant};
-
 use axum::Router;
 use axum::extract::{Extension, Path as UrlPath};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::get;
-use repoview_sources::{Env, TIMEOUT, truncate_diagnostic};
+use repoview_sources::{Env, Output, TIMEOUT, run_output, truncate_diagnostic};
 use serde_json::{Value, json};
 
 use crate::server::AppState;
@@ -119,8 +111,19 @@ async fn answer(env: Env, verb_and_rest: Vec<String>) -> Response {
     args.extend(rest.next());
     args.extend(["--format".to_owned(), "json".to_owned()]);
     args.extend(rest);
-    let ran = tokio::task::spawn_blocking(move || run_tool(&env, &program, &args, TIMEOUT)).await;
-    let Ok(ran) = ran else {
+    let ran = tokio::task::spawn_blocking(move || {
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        run_output(&env, &program, &args, TIMEOUT)
+    })
+    .await;
+    let Ok(Output {
+        exit,
+        stdout,
+        stderr,
+        status,
+        ..
+    }) = ran
+    else {
         return tool_error(
             StatusCode::BAD_GATEWAY,
             None,
@@ -128,50 +131,31 @@ async fn answer(env: Env, verb_and_rest: Vec<String>) -> Response {
             None,
         );
     };
-    match ran {
-        Ran::Exited {
-            code: Some(0),
-            stdout,
-            stderr,
-        } => {
-            if serde_json::from_slice::<serde::de::IgnoredAny>(&stdout).is_ok() {
-                ([(header::CONTENT_TYPE, "application/json")], stdout).into_response()
-            } else {
-                let mut text = format!("{TOOL} exited 0 without printing a JSON document");
-                if !stderr.trim().is_empty() {
-                    text.push_str(": ");
-                    text.push_str(&stderr);
-                }
-                tool_error(
-                    StatusCode::BAD_GATEWAY,
-                    Some(0),
-                    &text,
-                    Some(String::from_utf8_lossy(&stdout).into_owned()),
-                )
-            }
-        }
-        Ran::Exited {
-            code,
-            stdout,
-            stderr,
-        } => {
-            let stderr = if stderr.trim().is_empty() {
-                match code {
-                    Some(code) => format!("{TOOL} exited with status {code}"),
-                    None => format!("{TOOL} was killed by a signal"),
-                }
-            } else {
-                stderr
-            };
-            tool_error(
-                StatusCode::BAD_GATEWAY,
-                code,
-                &stderr,
-                Some(String::from_utf8_lossy(&stdout).into_owned()),
-            )
-        }
-        Ran::Failed(diagnostic) => tool_error(StatusCode::BAD_GATEWAY, None, &diagnostic, None),
+    // No status: a timeout or a spawn error, whose diagnostic is in `stderr`, and no stdout.
+    if status.is_none() {
+        return tool_error(StatusCode::BAD_GATEWAY, None, &stderr, None);
     }
+    if exit == Some(0) && serde_json::from_slice::<serde::de::IgnoredAny>(&stdout).is_ok() {
+        return ([(header::CONTENT_TYPE, "application/json")], stdout).into_response();
+    }
+    let stdout = String::from_utf8_lossy(&stdout).into_owned();
+    if exit == Some(0) {
+        let mut text = format!("{TOOL} exited 0 without printing a JSON document");
+        if !stderr.trim().is_empty() {
+            text.push_str(": ");
+            text.push_str(&stderr);
+        }
+        return tool_error(StatusCode::BAD_GATEWAY, Some(0), &text, Some(stdout));
+    }
+    let stderr = if stderr.trim().is_empty() {
+        match exit {
+            Some(code) => format!("{TOOL} exited with status {code}"),
+            None => format!("{TOOL} was killed by a signal"),
+        }
+    } else {
+        stderr
+    };
+    tool_error(StatusCode::BAD_GATEWAY, exit, &stderr, Some(stdout))
 }
 
 /// `{ "tool", "exit", "stderr", "stdout"? }` with `status`; `stderr` cut to the diagnostic limit.
@@ -192,168 +176,9 @@ fn tool_error(
     (status, Json(body)).into_response()
 }
 
-/// What one run of a tool produced.
-#[derive(Debug)]
-enum Ran {
-    /// The process ended; `code` is `None` when a signal ended it.
-    Exited {
-        code: Option<i32>,
-        stdout: Vec<u8>,
-        stderr: String,
-    },
-    /// It could not be started, or did not finish within the timeout.
-    Failed(String),
-}
-
-/// Run `program args…` in `env.root` with `env`'s `PATH`, no shell, stdin closed.
-///
-/// The exit code matters here, which `repoview_sources::run` does not report, hence this runner.
-/// Like that one, the child leads its own process group and the group is killed at the deadline,
-/// so a grandchild holding a pipe open cannot keep the request waiting.
-fn run_tool(env: &Env, program: &Path, args: &[String], timeout: Duration) -> Ran {
-    let deadline = Instant::now() + timeout;
-    let mut command = Command::new(program);
-    command
-        .args(args)
-        .current_dir(env.root())
-        .process_group(0)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    if let Some(path) = env.search_path() {
-        command.env("PATH", path);
-    }
-    let mut child = match command.spawn() {
-        Ok(child) => child,
-        Err(error) => return Ran::Failed(format!("{}: {error}", program.display())),
-    };
-    let group = child.id();
-    let stdout = drain(child.stdout.take());
-    let stderr = drain(child.stderr.take());
-    let timed_out = || {
-        kill_group(group);
-        Ran::Failed(format!(
-            "{} timed out after {} ms",
-            program.display(),
-            timeout.as_millis()
-        ))
-    };
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(5)),
-            Ok(None) => {
-                let ran = timed_out();
-                let _ = child.wait();
-                return ran;
-            }
-            Err(error) => {
-                kill_group(group);
-                let _ = child.wait();
-                return Ran::Failed(format!("{}: {error}", program.display()));
-            }
-        }
-    };
-    let (Ok(stdout), Ok(stderr)) = (
-        stdout.recv_timeout(deadline.saturating_duration_since(Instant::now())),
-        stderr.recv_timeout(deadline.saturating_duration_since(Instant::now())),
-    ) else {
-        return timed_out();
-    };
-    Ran::Exited {
-        code: status.code(),
-        stdout,
-        stderr: String::from_utf8_lossy(&stderr).into_owned(),
-    }
-}
-
-/// SIGKILL to every process in the group `group` leads.
-fn kill_group(group: u32) {
-    if let Ok(group) = libc::pid_t::try_from(group) {
-        // SAFETY: kill(2) with a negative pid signals the process group; it touches no memory.
-        unsafe {
-            libc::kill(-group, libc::SIGKILL);
-        }
-    }
-}
-
-/// Read `pipe` to its end on a thread; the bytes arrive on the returned channel.
-fn drain(pipe: Option<impl Read + Send + 'static>) -> Receiver<Vec<u8>> {
-    let (sender, receiver) = mpsc::channel();
-    thread::spawn(move || {
-        let mut bytes = Vec::new();
-        if let Some(mut pipe) = pipe {
-            let _ = pipe.read_to_end(&mut bytes);
-        }
-        let _ = sender.send(bytes);
-    });
-    receiver
-}
-
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
-
     use super::*;
-
-    fn script(dir: &Path, body: &str) -> std::path::PathBuf {
-        let path = dir.join("tool");
-        fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
-        path
-    }
-
-    fn run_script(body: &str, timeout: Duration) -> (Ran, Duration) {
-        let dir = tempfile::tempdir().unwrap();
-        let program = script(dir.path(), body);
-        let env = Env::new(dir.path());
-        // ETXTBSY: a concurrently forked test thread may still hold the write descriptor.
-        for _ in 0..200 {
-            let started = Instant::now();
-            match run_tool(&env, &program, &[], timeout) {
-                Ran::Failed(text) if text.contains("Text file busy") => {
-                    thread::sleep(Duration::from_millis(10))
-                }
-                ran => return (ran, started.elapsed()),
-            }
-        }
-        panic!("the script stayed busy");
-    }
-
-    #[test]
-    fn the_exit_code_and_both_streams_are_reported() {
-        let (ran, _) = run_script("printf out\nprintf err >&2\nexit 7", Duration::from_secs(5));
-        match ran {
-            Ran::Exited {
-                code,
-                stdout,
-                stderr,
-            } => {
-                assert_eq!(code, Some(7));
-                assert_eq!(stdout, b"out");
-                assert_eq!(stderr, "err");
-            }
-            other => panic!("{other:?}"),
-        }
-    }
-
-    #[test]
-    fn a_hung_tool_is_killed_at_the_deadline_even_with_a_grandchild_holding_the_pipe() {
-        let (ran, elapsed) = run_script("sleep 30 &\nsleep 30", Duration::from_millis(300));
-        match ran {
-            Ran::Failed(text) => assert!(text.contains("timed out after 300 ms"), "{text}"),
-            other => panic!("{other:?}"),
-        }
-        assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
-    }
-
-    #[test]
-    fn a_grandchild_holding_the_pipe_after_exit_is_bounded_too() {
-        let (ran, elapsed) = run_script("sleep 30 &\nexit 0", Duration::from_millis(300));
-        assert!(matches!(ran, Ran::Failed(_)), "{ran:?}");
-        assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
-    }
 
     #[test]
     fn the_id_pattern() {
