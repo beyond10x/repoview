@@ -17,7 +17,7 @@ SPA embedded in the binary. Humans start at [`README.md`](README.md).
 | path | what |
 |---|---|
 | `.engineering/planning/` | the AEP store: `vision:repoview`, `architecture-design:repoview`, the epics |
-| `ess/` | the read model specification (`format: ess/20`); `ess specify validate --path ess` |
+| `ess/` | the read model specification (`format: ess/22`); `ess specify validate --path ess` |
 | `crates/repoview/` | the binary: clap derive CLI, axum server, embedded SPA (planned) |
 | `crates/repoview-sources/` | one module per source: vcs, plan, spec, quality, docs (planned) |
 | `generated/` | Rust wire types generated from `ess/`; never hand-edited (planned) |
