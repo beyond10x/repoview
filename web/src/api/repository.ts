@@ -1,4 +1,5 @@
-// Wire contract: story:repository-page acceptance 1 (`/api/vcs`, `/api/docs`, `/api/docs/{name}`).
+// Wire contract: story:repository-page acceptance 1 (`/api/vcs`, `/api/docs`, `/api/docs/{name}`)
+// and story:taskfile-tasks acceptance 1 (`/api/tasks`).
 // Every payload is normalised here, so a block never meets a missing array.
 
 import { apiGet, type ApiResult } from './client'
@@ -66,6 +67,35 @@ export interface DocumentEntry {
 export interface Document {
   name: string
   markdown: string
+}
+
+/** One task from the Taskfile, as written there; nothing in it was evaluated. */
+export interface TaskEntry {
+  /** Prefixed with its include namespaces, `docs:build`. */
+  name: string
+  desc: string | null
+  summary: string | null
+  /** The task's own `internal: true`, or that of an include above it. */
+  internal: boolean
+  aliases: string[]
+}
+
+/** An `includes:` entry the server did not read, and why. */
+export interface RefusedInclude {
+  /** The include's namespace, `docs` or `docs:api`. */
+  include: string
+  /** The path as the Taskfile wrote it; `null` when it named none. */
+  taskfile: string | null
+  reason: string
+}
+
+export interface Tasks {
+  /** The root Taskfile's name, e.g. `Taskfile.yml`. */
+  file: string
+  tasks: TaskEntry[]
+  refused: RefusedInclude[]
+  /** The server stopped at its entry limit; later tasks and refusals are not listed. */
+  truncated: boolean
 }
 
 /** A block's data: loading, ready, or a sentence saying why not. */
@@ -144,6 +174,30 @@ export function normaliseDocuments(raw: unknown): DocumentEntry[] {
     .filter((entry) => entry.name !== '')
 }
 
+export function normaliseTasks(raw: unknown): Tasks {
+  const tasks = record(raw)
+  return {
+    file: text(tasks.file),
+    tasks: list(tasks.tasks)
+      .map((entry) => ({
+        name: text(entry.name),
+        desc: textOrNull(entry.desc),
+        summary: textOrNull(entry.summary),
+        internal: entry.internal === true,
+        aliases: Array.isArray(entry.aliases)
+          ? entry.aliases.filter((alias): alias is string => typeof alias === 'string')
+          : [],
+      }))
+      .filter((entry) => entry.name !== ''),
+    refused: list(tasks.refused).map((entry) => ({
+      include: text(entry.include),
+      taskfile: textOrNull(entry.taskfile),
+      reason: text(entry.reason),
+    })),
+    truncated: tasks.truncated === true,
+  }
+}
+
 /** What a failed request means for a block. `messages` names the 404 and 503 cases. */
 function unavailable<T>(
   result: Exclude<ApiResult<T>, { state: 'ready' }>,
@@ -190,6 +244,17 @@ export function loadDocument(name: string): Promise<Load<Document>> {
     absent: `${name} is absent`,
     unavailable: `${name} is unavailable`,
     other: { 413: `${name} is larger than 1 MiB and is not shown` },
+  })
+}
+
+/** `/api/tasks`; a Taskfile the server could not read shows the server's diagnostic. */
+export async function loadTasks(): Promise<Load<Tasks>> {
+  const result = await apiGet<unknown>('tasks')
+  if (result.state === 'ready') return { state: 'ready', data: normaliseTasks(result.data) }
+  const diagnostic = result.state === 'error' ? textOrNull(record(result.body).diagnostic) : null
+  return unavailable(result, {
+    absent: 'Taskfile.yml absent',
+    unavailable: diagnostic ?? 'the Taskfile could not be read',
   })
 }
 

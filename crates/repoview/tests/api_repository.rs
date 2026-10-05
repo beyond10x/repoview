@@ -850,14 +850,16 @@ async fn doc_is_served_outside_git_and_without_git() {
     }
 }
 
-/// Correction round 1: `/api/tasks` is gone; the route is the `/api` 404.
+/// Correction round 1 removed `/api/tasks`; story:taskfile-tasks brings it back as a file read,
+/// with an empty `PATH` (`tests/api_tasks.rs` covers the route).
 #[tokio::test]
-async fn tasks_route_is_gone() {
+async fn tasks_route_reads_the_taskfile() {
     let project = tempfile::tempdir().unwrap();
     fs::write(project.path().join("Taskfile.yml"), "version: '3'\n").unwrap();
     let path = bin_dir(&[]);
-    let (status, _) = get_raw(project.path(), path.path(), "/api/tasks").await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, body) = get(project.path(), path.path(), "/api/tasks").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["tasks"], json!([]));
 }
 
 #[tokio::test]

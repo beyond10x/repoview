@@ -85,8 +85,11 @@ fn recording_stub(dir: &Path, name: &str) {
 /// repository ran its own shell command on page load.
 ///
 /// Correction round 1 (coordinator decision): the route is removed; a later story reads
-/// `Taskfile.yml` without executing it. So `GET /api/tasks` is 404 and starts no process: a
-/// `task` on `PATH` is never run and the probe Taskfile's `sh:` command never fires.
+/// `Taskfile.yml` without executing it.
+///
+/// story:taskfile-tasks: that story landed. `GET /api/tasks` is 200 with the Taskfile's tasks and
+/// still starts no process: a `task` on `PATH` is never run and the probe Taskfile's `sh:` command
+/// never fires.
 #[tokio::test]
 async fn tasks_listing_executes_no_taskfile_shell_command() {
     let project = tempfile::tempdir().unwrap();
@@ -111,12 +114,10 @@ async fn tasks_listing_executes_no_taskfile_shell_command() {
     let path = bin_dir(&["touch"]);
     recording_stub(path.path(), "task");
     let (status, body) = get_raw(root, path.path(), "/api/tasks").await;
-    assert_eq!(
-        status,
-        StatusCode::NOT_FOUND,
-        "{}",
-        String::from_utf8_lossy(&body)
-    );
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    let body: Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["tasks"][0]["name"], "check", "{body}");
+    assert_eq!(body["tasks"][0]["desc"], "The gate", "{body}");
     assert!(
         !root.join("task-was-started").exists(),
         "GET /api/tasks started `task`"

@@ -1,19 +1,30 @@
 <script setup lang="ts">
-// Git state and the top-level documents: /api/vcs and /api/docs.
+// Git state, the top-level documents and the Taskfile's tasks: /api/vcs, /api/docs, /api/tasks.
 import { shallowRef } from 'vue'
-import { loadDocuments, loadVcs, type DocumentEntry, type Load, type Vcs } from '../api/repository'
+import {
+  loadDocuments,
+  loadTasks,
+  loadVcs,
+  type DocumentEntry,
+  type Load,
+  type Tasks,
+  type Vcs,
+} from '../api/repository'
 import CommitsTable from '../components/repository/CommitsTable.vue'
 import DocumentTabs from '../components/repository/DocumentTabs.vue'
 import RemotesList from '../components/repository/RemotesList.vue'
 import StatusBlock from '../components/repository/StatusBlock.vue'
 import TagsTable from '../components/repository/TagsTable.vue'
+import TasksList from '../components/repository/TasksList.vue'
 import WorktreesTable from '../components/repository/WorktreesTable.vue'
 
 const vcs = shallowRef<Load<Vcs>>({ state: 'loading' })
 const documents = shallowRef<Load<DocumentEntry[]>>({ state: 'loading' })
+const tasks = shallowRef<Load<Tasks>>({ state: 'loading' })
 
 void loadVcs().then((result) => (vcs.value = result))
 void loadDocuments().then((result) => (documents.value = result))
+void loadTasks().then((result) => (tasks.value = result))
 </script>
 
 <template>
@@ -61,6 +72,22 @@ void loadDocuments().then((result) => (documents.value = result))
           <RemotesList :remotes="vcs.data.remotes" :error="vcs.data.remotes_error" />
         </article>
       </template>
+
+      <article class="block full" data-block="tasks">
+        <h2>Tasks</h2>
+        <p v-if="tasks.state === 'loading'" class="muted">loading…</p>
+        <p
+          v-else-if="tasks.state === 'unavailable'"
+          class="unavailable"
+          :class="`reason-${tasks.reason}`"
+          data-test="unavailable"
+          data-block="tasks"
+          :data-reason="tasks.reason"
+        >
+          {{ tasks.message }}
+        </p>
+        <TasksList v-else :tasks="tasks.data" />
+      </article>
 
       <article class="block wide" data-block="docs">
         <h2>Documents</h2>

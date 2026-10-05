@@ -42,7 +42,7 @@ afterEach(() => {
 })
 
 describe('RepositoryPage', () => {
-  it('shows status, commits, tags, remotes, worktrees and documents, and no task list', async () => {
+  it('shows status, commits, tags, remotes, worktrees, documents and the task block', async () => {
     const wrapper = await mountPage(FULL)
     expect(wrapper.get('h1').text()).toBe('Repository')
     expect(wrapper.get('[data-test="branch"]').text()).toBe('main')
@@ -58,16 +58,23 @@ describe('RepositoryPage', () => {
     ])
     expect(wrapper.get('[data-test="doc-absent"]').text()).toBe('STATUS.md absent')
     expect(wrapper.get('[data-test="doc-panel"] h1').text()).toBe('Example')
-    // Correction round 1: no task list until a story reads Taskfile.yml without executing it.
-    expect(wrapper.find('[data-block="tasks"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('Tasks')
+    // story:taskfile-tasks: the task block is there; FULL serves no Taskfile, so it reads absent.
+    expect(wrapper.get('[data-block="tasks"] h2').text()).toBe('Tasks')
+    expect(wrapper.get('[data-test="unavailable"][data-block="tasks"]').text()).toBe(
+      'Taskfile.yml absent',
+    )
   })
 
-  it('reads its three routes once each, and never /api/tasks', async () => {
+  it('reads its four routes once each', async () => {
     const mock = serveRoutes(FULL)
     mount(RepositoryPage)
     await flushPromises()
-    expect(requestedUrls(mock).sort()).toEqual(['/api/docs', '/api/docs/README.md', '/api/vcs'])
+    expect(requestedUrls(mock).sort()).toEqual([
+      '/api/docs',
+      '/api/docs/README.md',
+      '/api/tasks',
+      '/api/vcs',
+    ])
   })
 
   it('a detached HEAD reads "detached HEAD"', async () => {
