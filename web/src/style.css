@@ -1,0 +1,180 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1b1f24;
+  --muted: #5b6470;
+  --surface: #f5f6f8;
+  --border: #d8dce2;
+  --accent: #2f5fd0;
+  --present: #1f7a3d;
+  --absent: #6b7280;
+  --missing: #9a6200;
+  --failed: #b42318;
+  --radius: 6px;
+  --gap: 1rem;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171b;
+    --fg: #e6e8eb;
+    --muted: #9aa3ad;
+    --surface: #1d2126;
+    --border: #2e343b;
+    --accent: #7aa2ff;
+    --present: #5fd08a;
+    --absent: #9aa3ad;
+    --missing: #f0b44c;
+    --failed: #ff7a6e;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.top-bar {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gap);
+  padding: 0.75rem var(--gap);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.brand {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.project-root {
+  font-family: var(--mono);
+  color: var(--muted);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  min-height: calc(100vh - 3rem);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: var(--gap);
+  border-right: 1px solid var(--border);
+}
+
+.nav a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.nav a.router-link-exact-active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.main {
+  padding: var(--gap);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--gap);
+}
+
+.card {
+  padding: var(--gap);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.kind {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.status {
+  font-weight: 600;
+}
+
+.status-Present {
+  color: var(--present);
+}
+
+.status-Absent {
+  color: var(--absent);
+}
+
+.status-ToolMissing {
+  color: var(--missing);
+}
+
+.status-Failed {
+  color: var(--failed);
+}
+
+.tool,
+.tool-path,
+.location {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+}
+
+.summary dt {
+  color: var(--muted);
+}
+
+.summary dd {
+  margin: 0;
+  font-family: var(--mono);
+}
+
+.diagnostic {
+  margin: 0;
+  padding: 0.5rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  border-left: 3px solid var(--failed);
+}
+
+.notice-error {
+  color: var(--failed);
+  font-weight: 600;
+}
