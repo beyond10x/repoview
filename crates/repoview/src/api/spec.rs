@@ -19,13 +19,8 @@
 //! The project is the `Extension<Env>` layered over the router; every `ess` runs in its root
 //! with its `PATH`.
 
-use std::io::Read;
-use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::{Command, Stdio};
-use std::sync::mpsc::{self, Receiver};
 use std::thread;
-use std::time::{Duration, Instant};
 
 use axum::Extension;
 use axum::Router;
@@ -33,7 +28,7 @@ use axum::extract::Path as UrlPath;
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use repoview_sources::{Env, TIMEOUT, detected_roots, truncate_diagnostic};
+use repoview_sources::{Env, TIMEOUT, detected_roots, run_output, truncate_diagnostic};
 use serde_json::{Value, json};
 
 use crate::server::AppState;
@@ -153,19 +148,18 @@ fn list_roots(env: &Env) -> Answer {
 fn validate(env: &Env, ess: &Path, root: &str) -> (Value, bool) {
     let path_arg = format!("--path={root}");
     let args = ["specify", "validate", &path_arg, "--format", "json"];
-    match run(env, ess, &args, TIMEOUT) {
-        Run::Exited {
-            code,
-            stdout,
-            stderr,
-        } => match serde_json::from_str::<Value>(&stdout) {
-            Ok(value @ Value::Object(_)) => {
-                let ok = code == Some(0) && value.get("valid") == Some(&Value::Bool(true));
-                (value, ok)
-            }
-            _ => (tool_error(code, &stderr, &stdout), false),
-        },
-        Run::Failed(diagnostic) => (tool_error(None, &diagnostic, ""), false),
+    let output = run_output(env, ess, &args, TIMEOUT);
+    if output.status.is_none() {
+        // A timeout or a spawn error: the diagnostic is in `stderr`.
+        return (tool_error(None, &output.stderr, ""), false);
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    match serde_json::from_str::<Value>(&stdout) {
+        Ok(value @ Value::Object(_)) => {
+            let ok = output.exit == Some(0) && value.get("valid") == Some(&Value::Bool(true));
+            (value, ok)
+        }
+        _ => (tool_error(output.exit, &output.stderr, &stdout), false),
     }
 }
 
@@ -181,24 +175,20 @@ fn view(env: &Env, rest: &str) -> Answer {
         return missing();
     };
     let path_arg = format!("--path={root}");
-    let (code, stdout, stderr) = match run(env, &ess, &view.args(&path_arg), TIMEOUT) {
-        Run::Exited {
-            code: Some(0),
-            stdout,
-            stderr,
-        } => (0, stdout, stderr),
-        Run::Exited {
-            code,
-            stdout,
-            stderr,
-        } => return bad_gateway(code, &stderr, &stdout),
-        Run::Failed(diagnostic) => return bad_gateway(None, &diagnostic, ""),
-    };
+    let output = run_output(env, &ess, &view.args(&path_arg), TIMEOUT);
+    if output.status.is_none() {
+        // A timeout or a spawn error: the diagnostic is in `stderr`.
+        return bad_gateway(None, &output.stderr, "");
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    if output.exit != Some(0) {
+        return bad_gateway(output.exit, &output.stderr, &stdout);
+    }
     match view {
         View::Mermaid => Answer::Json(StatusCode::OK, json!({ "mermaid": stdout })),
         View::Ir | View::Graph => match serde_json::from_str::<Value>(&stdout) {
             Ok(_) => Answer::RawJson(stdout),
-            Err(_) => bad_gateway(Some(code), &stderr, &stdout),
+            Err(_) => bad_gateway(Some(0), &output.stderr, &stdout),
         },
     }
 }
@@ -231,103 +221,6 @@ fn not_found() -> Answer {
         StatusCode::NOT_FOUND,
         json!({ "error": "not a detected specification root" }),
     )
-}
-
-/// One finished tool run.
-enum Run {
-    /// The tool exited; `code` is `None` when a signal ended it.
-    Exited {
-        code: Option<i32>,
-        stdout: String,
-        stderr: String,
-    },
-    /// It could not be started, or it timed out.
-    Failed(String),
-}
-
-/// `program args…` in `env.root` with `env`'s `PATH`, no shell, bounded by `timeout` output
-/// included, keeping stdout and the exit code on failure (`repoview_sources::run` keeps neither,
-/// and `ess specify validate` prints its refusal as JSON on stdout with exit 1). The child leads
-/// its own process group, which is killed at the deadline.
-fn run(env: &Env, program: &Path, args: &[&str], timeout: Duration) -> Run {
-    let deadline = Instant::now() + timeout;
-    let mut command = Command::new(program);
-    command
-        .args(args)
-        .current_dir(env.root())
-        .process_group(0)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    if let Some(path) = &env.path {
-        command.env("PATH", path);
-    }
-    let mut child = match command.spawn() {
-        Ok(child) => child,
-        Err(error) => return Run::Failed(format!("{}: {error}", program.display())),
-    };
-    let group = child.id();
-    let stdout = drain(child.stdout.take());
-    let stderr = drain(child.stderr.take());
-    let timed_out = || {
-        kill_group(group);
-        Run::Failed(format!(
-            "{} timed out after {} ms",
-            program.display(),
-            timeout.as_millis()
-        ))
-    };
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if Instant::now() >= deadline => {
-                let outcome = timed_out();
-                let _ = child.wait();
-                return outcome;
-            }
-            Ok(None) => thread::sleep(Duration::from_millis(5)),
-            Err(error) => {
-                kill_group(group);
-                let _ = child.wait();
-                return Run::Failed(format!("{}: {error}", program.display()));
-            }
-        }
-    };
-    let remaining = || deadline.saturating_duration_since(Instant::now());
-    let (Ok(stdout), Ok(stderr)) = (
-        stdout.recv_timeout(remaining()),
-        stderr.recv_timeout(remaining()),
-    ) else {
-        return timed_out();
-    };
-    Run::Exited {
-        code: status.code(),
-        stdout,
-        stderr,
-    }
-}
-
-/// SIGKILL to every process in the group `group` leads.
-fn kill_group(group: u32) {
-    if let Ok(group) = libc::pid_t::try_from(group) {
-        // SAFETY: kill(2) with a negative pid signals the process group; it touches no memory.
-        unsafe {
-            libc::kill(-group, libc::SIGKILL);
-        }
-    }
-}
-
-/// Read `pipe` to its end on a thread; the text arrives on the returned channel.
-fn drain(pipe: Option<impl Read + Send + 'static>) -> Receiver<String> {
-    let (sender, receiver) = mpsc::channel();
-    thread::spawn(move || {
-        let mut bytes = Vec::new();
-        if let Some(mut pipe) = pipe {
-            let _ = pipe.read_to_end(&mut bytes);
-        }
-        let _ = sender.send(String::from_utf8_lossy(&bytes).into_owned());
-    });
-    receiver
 }
 
 #[cfg(test)]
