@@ -1,0 +1,12 @@
+{
+  "valid": true,
+  "system": "codegate",
+  "version": "v1",
+  "files_read": 2,
+  "scenarios": 26,
+  "domains": 1,
+  "commands": 1,
+  "events": 0,
+  "components": 0,
+  "unresolved_references": []
+}

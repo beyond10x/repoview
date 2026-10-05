@@ -1,0 +1,241 @@
+{
+  "system": "repoview",
+  "version": 1,
+  "naming": {},
+  "domains": {
+    "repoview.project": {
+      "name": "repoview.project",
+      "naming": {
+        "summary": "The read model repoview builds for one project directory: the project itself and every source of facts detected inside it. Facts that belong to another system (AEP artifacts, ESS IR, Codegate assessments, Git objects) are referenced as that system's own documents, never re-modelled here."
+      },
+      "types": [
+        "repoview.project.Availability",
+        "repoview.project.Project.State",
+        "repoview.project.ProjectRoot",
+        "repoview.project.Source.State",
+        "repoview.project.SourceId",
+        "repoview.project.SourceKind"
+      ],
+      "entities": ["repoview.project.Project", "repoview.project.Source"],
+      "commands": [],
+      "events": [],
+      "errors": [],
+      "views": [],
+      "actors": []
+    }
+  },
+  "types": {
+    "repoview.project.Availability": {
+      "name": "repoview.project.Availability",
+      "body": {
+        "kind": "enum",
+        "variants": ["Present", "Absent", "ToolMissing", "Failed"]
+      },
+      "naming": {}
+    },
+    "repoview.project.Project.State": {
+      "name": "repoview.project.Project.State",
+      "body": {
+        "kind": "enum",
+        "variants": ["Observed"]
+      },
+      "naming": {}
+    },
+    "repoview.project.ProjectRoot": {
+      "name": "repoview.project.ProjectRoot",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "repoview.project.Source.State": {
+      "name": "repoview.project.Source.State",
+      "body": {
+        "kind": "enum",
+        "variants": ["Observed"]
+      },
+      "naming": {}
+    },
+    "repoview.project.SourceId": {
+      "name": "repoview.project.SourceId",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "repoview.project.SourceKind": {
+      "name": "repoview.project.SourceKind",
+      "body": {
+        "kind": "enum",
+        "variants": ["Vcs", "Planning", "Specification", "Quality", "Documents"]
+      },
+      "naming": {}
+    }
+  },
+  "conversions": [],
+  "entities": {
+    "repoview.project.Project": {
+      "name": "repoview.project.Project",
+      "domain": "repoview.project",
+      "identity": {
+        "name": "root",
+        "type_ref": {
+          "kind": "declared",
+          "name": "repoview.project.ProjectRoot"
+        },
+        "naming": {}
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "string"
+          },
+          "naming": {}
+        }
+      ],
+      "state_type": "repoview.project.Project.State",
+      "lifecycle": {
+        "states": ["Observed"],
+        "initial": "Observed",
+        "terminal": ["Observed"]
+      },
+      "invariants": [],
+      "relations": [
+        {
+          "name": "sources",
+          "kind": "owns",
+          "target": "repoview.project.Source",
+          "cardinality": "many",
+          "via": "project_root"
+        }
+      ],
+      "naming": {}
+    },
+    "repoview.project.Source": {
+      "name": "repoview.project.Source",
+      "domain": "repoview.project",
+      "identity": {
+        "name": "source_id",
+        "type_ref": {
+          "kind": "declared",
+          "name": "repoview.project.SourceId"
+        },
+        "naming": {}
+      },
+      "fields": [
+        {
+          "name": "project_root",
+          "type_ref": {
+            "kind": "declared",
+            "name": "repoview.project.ProjectRoot"
+          },
+          "naming": {}
+        },
+        {
+          "name": "kind",
+          "type_ref": {
+            "kind": "declared",
+            "name": "repoview.project.SourceKind"
+          },
+          "naming": {}
+        },
+        {
+          "name": "location",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "string"
+          },
+          "naming": {}
+        },
+        {
+          "name": "availability",
+          "type_ref": {
+            "kind": "declared",
+            "name": "repoview.project.Availability"
+          },
+          "naming": {}
+        },
+        {
+          "name": "tool",
+          "type_ref": {
+            "kind": "optional",
+            "of": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          },
+          "naming": {}
+        },
+        {
+          "name": "tool_path",
+          "type_ref": {
+            "kind": "optional",
+            "of": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          },
+          "naming": {}
+        },
+        {
+          "name": "tool_version",
+          "type_ref": {
+            "kind": "optional",
+            "of": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          },
+          "naming": {}
+        },
+        {
+          "name": "diagnostic",
+          "type_ref": {
+            "kind": "optional",
+            "of": {
+              "kind": "primitive",
+              "name": "string"
+            }
+          },
+          "naming": {}
+        },
+        {
+          "name": "summary",
+          "type_ref": {
+            "kind": "primitive",
+            "name": "json"
+          },
+          "naming": {}
+        }
+      ],
+      "state_type": "repoview.project.Source.State",
+      "lifecycle": {
+        "states": ["Observed"],
+        "initial": "Observed",
+        "terminal": ["Observed"]
+      },
+      "invariants": [],
+      "naming": {}
+    }
+  },
+  "commands": {},
+  "events": {},
+  "errors": {},
+  "views": {},
+  "actors": {},
+  "bindings": {},
+  "components": {},
+  "workloads": {}
+}

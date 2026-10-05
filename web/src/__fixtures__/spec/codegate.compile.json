@@ -1,0 +1,647 @@
+{
+  "system": "codegate",
+  "version": 1,
+  "naming": {},
+  "domains": {
+    "codegate.dependency": {
+      "name": "codegate.dependency",
+      "naming": {
+        "summary": "Immutable dependency fact values and an offline, language-independent evaluation."
+      },
+      "types": [
+        "codegate.dependency.Coverage",
+        "codegate.dependency.CoverageStatus",
+        "codegate.dependency.DependencyKind",
+        "codegate.dependency.Diagnostic",
+        "codegate.dependency.DiagnosticCode",
+        "codegate.dependency.Edge",
+        "codegate.dependency.EdgeId",
+        "codegate.dependency.Evaluation",
+        "codegate.dependency.FactSnapshot",
+        "codegate.dependency.FanOut",
+        "codegate.dependency.Finding",
+        "codegate.dependency.ForbiddenDependency",
+        "codegate.dependency.Policy",
+        "codegate.dependency.Unit",
+        "codegate.dependency.UnitId",
+        "codegate.dependency.Verdict"
+      ],
+      "entities": [],
+      "commands": ["codegate.dependency.Evaluate"],
+      "events": [],
+      "errors": [],
+      "views": [],
+      "actors": []
+    }
+  },
+  "types": {
+    "codegate.dependency.Coverage": {
+      "name": "codegate.dependency.Coverage",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "status",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.CoverageStatus"
+            },
+            "naming": {}
+          },
+          {
+            "name": "gaps",
+            "type_ref": {
+              "kind": "list",
+              "of": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "codegate.dependency.CoverageStatus": {
+      "name": "codegate.dependency.CoverageStatus",
+      "body": {
+        "kind": "enum",
+        "variants": ["Complete", "Partial", "Unsupported", "Failed"]
+      },
+      "naming": {}
+    },
+    "codegate.dependency.DependencyKind": {
+      "name": "codegate.dependency.DependencyKind",
+      "body": {
+        "kind": "enum",
+        "variants": ["Runtime", "Build", "Test"]
+      },
+      "naming": {}
+    },
+    "codegate.dependency.Diagnostic": {
+      "name": "codegate.dependency.Diagnostic",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "code",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.DiagnosticCode"
+            },
+            "naming": {}
+          },
+          {
+            "name": "subject",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "codegate.dependency.DiagnosticCode": {
+      "name": "codegate.dependency.DiagnosticCode",
+      "body": {
+        "kind": "enum",
+        "variants": [
+          "InvalidFormat",
+          "EmptyIdentity",
+          "DuplicateUnit",
+          "DuplicateEdge",
+          "DanglingSource",
+          "DanglingTarget",
+          "InvalidTarget",
+          "InvalidCoverage",
+          "InvalidPolicy",
+          "SourceMismatch",
+          "ConfigurationMismatch",
+          "PartialCoverage",
+          "UnsupportedCoverage",
+          "FailedCoverage"
+        ]
+      },
+      "naming": {}
+    },
+    "codegate.dependency.Edge": {
+      "name": "codegate.dependency.Edge",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.EdgeId"
+            },
+            "naming": {}
+          },
+          {
+            "name": "source",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.UnitId"
+            },
+            "naming": {}
+          },
+          {
+            "name": "target",
+            "type_ref": {
+              "kind": "optional",
+              "of": {
+                "kind": "declared",
+                "name": "codegate.dependency.UnitId"
+              }
+            },
+            "naming": {}
+          },
+          {
+            "name": "unresolved_target",
+            "type_ref": {
+              "kind": "optional",
+              "of": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            },
+            "naming": {}
+          },
+          {
+            "name": "kind",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.DependencyKind"
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "codegate.dependency.EdgeId": {
+      "name": "codegate.dependency.EdgeId",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "codegate.dependency.Evaluation": {
+      "name": "codegate.dependency.Evaluation",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "format",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "source_id",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "configuration_id",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "policy",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.Policy"
+            },
+            "naming": {}
+          },
+          {
+            "name": "metric_id",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "checker_id",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "coverage",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.CoverageStatus"
+            },
+            "naming": {}
+          },
+          {
+            "name": "verdict",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.Verdict"
+            },
+            "naming": {}
+          },
+          {
+            "name": "fan_out",
+            "type_ref": {
+              "kind": "list",
+              "of": {
+                "kind": "declared",
+                "name": "codegate.dependency.FanOut"
+              }
+            },
+            "naming": {}
+          },
+          {
+            "name": "findings",
+            "type_ref": {
+              "kind": "list",
+              "of": {
+                "kind": "declared",
+                "name": "codegate.dependency.Finding"
+              }
+            },
+            "naming": {}
+          },
+          {
+            "name": "diagnostics",
+            "type_ref": {
+              "kind": "list",
+              "of": {
+                "kind": "declared",
+                "name": "codegate.dependency.Diagnostic"
+              }
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "codegate.dependency.FactSnapshot": {
+      "name": "codegate.dependency.FactSnapshot",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "format",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "source_id",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "configuration_id",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "producer",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "producer_version",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "units",
+            "type_ref": {
+              "kind": "list",
+              "of": {
+                "kind": "declared",
+                "name": "codegate.dependency.Unit"
+              }
+            },
+            "naming": {}
+          },
+          {
+            "name": "edges",
+            "type_ref": {
+              "kind": "list",
+              "of": {
+                "kind": "declared",
+                "name": "codegate.dependency.Edge"
+              }
+            },
+            "naming": {}
+          },
+          {
+            "name": "coverage",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.Coverage"
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "codegate.dependency.FanOut": {
+      "name": "codegate.dependency.FanOut",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "unit_id",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.UnitId"
+            },
+            "naming": {}
+          },
+          {
+            "name": "value",
+            "type_ref": {
+              "kind": "optional",
+              "of": {
+                "kind": "primitive",
+                "name": "integer"
+              }
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "codegate.dependency.Finding": {
+      "name": "codegate.dependency.Finding",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "edge_id",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.EdgeId"
+            },
+            "naming": {}
+          },
+          {
+            "name": "source",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.UnitId"
+            },
+            "naming": {}
+          },
+          {
+            "name": "target",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.UnitId"
+            },
+            "naming": {}
+          },
+          {
+            "name": "kind",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.DependencyKind"
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "codegate.dependency.ForbiddenDependency": {
+      "name": "codegate.dependency.ForbiddenDependency",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "source",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.UnitId"
+            },
+            "naming": {}
+          },
+          {
+            "name": "target",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.UnitId"
+            },
+            "naming": {}
+          },
+          {
+            "name": "kind",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.DependencyKind"
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "codegate.dependency.Policy": {
+      "name": "codegate.dependency.Policy",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "format",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "expected_source_id",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "expected_configuration_id",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          },
+          {
+            "name": "dependency_kind",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.DependencyKind"
+            },
+            "naming": {}
+          },
+          {
+            "name": "forbidden",
+            "type_ref": {
+              "kind": "list",
+              "of": {
+                "kind": "declared",
+                "name": "codegate.dependency.ForbiddenDependency"
+              }
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "codegate.dependency.Unit": {
+      "name": "codegate.dependency.Unit",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type_ref": {
+              "kind": "declared",
+              "name": "codegate.dependency.UnitId"
+            },
+            "naming": {}
+          },
+          {
+            "name": "language",
+            "type_ref": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "codegate.dependency.UnitId": {
+      "name": "codegate.dependency.UnitId",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "codegate.dependency.Verdict": {
+      "name": "codegate.dependency.Verdict",
+      "body": {
+        "kind": "enum",
+        "variants": ["Pass", "Fail", "Incomplete", "Unsupported", "Error"]
+      },
+      "naming": {}
+    }
+  },
+  "conversions": [],
+  "entities": {},
+  "commands": {
+    "codegate.dependency.Evaluate": {
+      "name": "codegate.dependency.Evaluate",
+      "domain": "codegate.dependency",
+      "input": [
+        {
+          "name": "snapshot",
+          "type_ref": {
+            "kind": "declared",
+            "name": "codegate.dependency.FactSnapshot"
+          },
+          "naming": {}
+        },
+        {
+          "name": "policy",
+          "type_ref": {
+            "kind": "declared",
+            "name": "codegate.dependency.Policy"
+          },
+          "naming": {}
+        }
+      ],
+      "response": [
+        {
+          "name": "report",
+          "type_ref": {
+            "kind": "declared",
+            "name": "codegate.dependency.Evaluation"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "evaluated",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "test_strategy": "default_branch",
+          "emits": [],
+          "returns": true
+        }
+      ],
+      "naming": {}
+    }
+  },
+  "events": {},
+  "errors": {},
+  "views": {},
+  "actors": {},
+  "bindings": {},
+  "components": {},
+  "workloads": {}
+}

@@ -1,0 +1,27 @@
+flowchart TB
+    subgraph who["who may ask"]
+        who0["billing.invoice.Auditor"]
+        who1["billing.invoice.Customer"]
+    end
+    subgraph unit0["email-service"]
+        cmd0["billing.email.SendEmail"]
+        evt0["billing.email.DeliveryEscalated"]
+        evt1["billing.email.EmailSent"]
+    end
+    subgraph unit1["invoice-service"]
+        cmd1["billing.invoice.CancelInvoice"]
+        cmd2["billing.invoice.CreateInvoice"]
+        cmd3["billing.invoice.IssueInvoice"]
+        cmd4["billing.invoice.PayInvoice"]
+        evt2["billing.invoice.InvoiceCancelled"]
+        evt3["billing.invoice.InvoiceCreated"]
+        evt4["billing.invoice.InvoiceIssued"]
+        evt5["billing.invoice.InvoicePaid"]
+    end
+    who1 -->|"may invoke"| cmd2
+    cmd0 -->|"sent"| evt1
+    cmd1 -->|"cancelled"| evt2
+    cmd2 -->|"accepted"| evt3
+    cmd3 -->|"issued"| evt4
+    cmd4 -->|"settled"| evt5
+    evt3 -.->|"notify-on-invoice-created"| cmd0

@@ -1,0 +1,147 @@
+{
+  "system": "billing",
+  "version": "v3",
+  "groups": [
+    {
+      "kind": "actors",
+      "label": "who may ask",
+      "members": ["billing.invoice.Auditor", "billing.invoice.Customer"]
+    },
+    {
+      "kind": "component",
+      "label": "email-service",
+      "members": [
+        "billing.email.SendEmail",
+        "billing.email.DeliveryEscalated",
+        "billing.email.EmailSent"
+      ]
+    },
+    {
+      "kind": "component",
+      "label": "invoice-service",
+      "members": [
+        "billing.invoice.CancelInvoice",
+        "billing.invoice.CreateInvoice",
+        "billing.invoice.IssueInvoice",
+        "billing.invoice.PayInvoice",
+        "billing.invoice.InvoiceCancelled",
+        "billing.invoice.InvoiceCreated",
+        "billing.invoice.InvoiceIssued",
+        "billing.invoice.InvoicePaid"
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "kind": "actor",
+      "name": "billing.invoice.Auditor",
+      "domain": "billing.invoice"
+    },
+    {
+      "kind": "actor",
+      "name": "billing.invoice.Customer",
+      "domain": "billing.invoice"
+    },
+    {
+      "kind": "command",
+      "name": "billing.email.SendEmail",
+      "domain": "billing.email"
+    },
+    {
+      "kind": "command",
+      "name": "billing.invoice.CancelInvoice",
+      "domain": "billing.invoice"
+    },
+    {
+      "kind": "command",
+      "name": "billing.invoice.CreateInvoice",
+      "domain": "billing.invoice"
+    },
+    {
+      "kind": "command",
+      "name": "billing.invoice.IssueInvoice",
+      "domain": "billing.invoice"
+    },
+    {
+      "kind": "command",
+      "name": "billing.invoice.PayInvoice",
+      "domain": "billing.invoice"
+    },
+    {
+      "kind": "event",
+      "name": "billing.email.DeliveryEscalated",
+      "domain": "billing.email"
+    },
+    {
+      "kind": "event",
+      "name": "billing.email.EmailSent",
+      "domain": "billing.email"
+    },
+    {
+      "kind": "event",
+      "name": "billing.invoice.InvoiceCancelled",
+      "domain": "billing.invoice"
+    },
+    {
+      "kind": "event",
+      "name": "billing.invoice.InvoiceCreated",
+      "domain": "billing.invoice"
+    },
+    {
+      "kind": "event",
+      "name": "billing.invoice.InvoiceIssued",
+      "domain": "billing.invoice"
+    },
+    {
+      "kind": "event",
+      "name": "billing.invoice.InvoicePaid",
+      "domain": "billing.invoice"
+    }
+  ],
+  "edges": [
+    {
+      "kind": "grant",
+      "from": "billing.invoice.Customer",
+      "to": "billing.invoice.CreateInvoice",
+      "label": "may invoke"
+    },
+    {
+      "kind": "emission",
+      "from": "billing.email.SendEmail",
+      "to": "billing.email.EmailSent",
+      "label": "sent"
+    },
+    {
+      "kind": "emission",
+      "from": "billing.invoice.CancelInvoice",
+      "to": "billing.invoice.InvoiceCancelled",
+      "label": "cancelled"
+    },
+    {
+      "kind": "emission",
+      "from": "billing.invoice.CreateInvoice",
+      "to": "billing.invoice.InvoiceCreated",
+      "label": "accepted"
+    },
+    {
+      "kind": "emission",
+      "from": "billing.invoice.IssueInvoice",
+      "to": "billing.invoice.InvoiceIssued",
+      "label": "issued"
+    },
+    {
+      "kind": "emission",
+      "from": "billing.invoice.PayInvoice",
+      "to": "billing.invoice.InvoicePaid",
+      "label": "settled"
+    },
+    {
+      "kind": "binding",
+      "from": "billing.invoice.InvoiceCreated",
+      "to": "billing.email.SendEmail",
+      "label": "notify-on-invoice-created",
+      "delivery": "at_least_once",
+      "on_failure": "escalate"
+    }
+  ]
+}
