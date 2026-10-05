@@ -3,7 +3,8 @@ import { computed } from 'vue'
 import type { Source } from '../api/snapshot'
 import { hasText, orElse } from '../display'
 
-const props = defineProps<{ source: Source }>()
+// `to`: the page this source belongs to; without it the card has no link.
+const props = defineProps<{ source: Source; to?: string | null }>()
 
 const status = computed(() => {
   const { availability, tool } = props.source
@@ -92,7 +93,10 @@ const summaryRows = computed<Array<[string, string]>>(() => {
     :data-availability="source.availability"
   >
     <header class="card-header">
-      <h2>{{ orElse(source.source_id, 'unnamed source') }}</h2>
+      <h2>
+        <RouterLink v-if="to" :to="to">{{ orElse(source.source_id, 'unnamed source') }}</RouterLink>
+        <template v-else>{{ orElse(source.source_id, 'unnamed source') }}</template>
+      </h2>
       <span class="kind">{{ source.kind }}</span>
     </header>
     <p class="location">{{ orElse(source.location, 'no location') }}</p>

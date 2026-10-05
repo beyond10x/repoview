@@ -2,6 +2,7 @@
 import { TOKEN_REJECTED_MESSAGE } from '../api/snapshot'
 import SourceCard from '../components/SourceCard.vue'
 import { useSnapshot } from '../composables/useSnapshot'
+import { pageForSource } from './nav'
 
 const snapshot = useSnapshot()
 </script>
@@ -21,6 +22,7 @@ const snapshot = useSnapshot()
         v-for="source in snapshot.snapshot.sources"
         :key="source.source_id"
         :source="source"
+        :to="pageForSource(source.source_id)"
       />
     </div>
   </section>
