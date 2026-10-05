@@ -1,5 +1,6 @@
-//! Adversary cases for story:quality-page: the background assessment run against a client that
-//! goes away mid-request, and against the server shutting down while `codegate assess` runs.
+//! Adversary cases for story:quality-page, rewritten by story:quality-codegate to the beyond10x
+//! codegate probe (`--version`, then `--help`): the run started by the first request against a
+//! client that goes away mid-request, and against the server shutting down while `codegate` runs.
 
 mod common;
 
@@ -11,12 +12,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use common::{Server, bin_dir, git, repoview};
+use common::{Server, bin_dir, repoview};
 use repoview::server::TOKEN_HEADER;
-use tempfile::TempDir;
 
-const CAPABILITIES: &str = r#"[{"language":"markdown","name":"markdown","capabilities":[]}]"#;
-const ASSESSMENT: &str = r#"{"rating":"B-","score_max":100,"scores":{"overall":67}}"#;
+const HELP: &str = "Usage: codegate <COMMAND>\n\nCommands:\n  evaluate  \n  help      Print help\n";
 
 fn write_stub(dir: &Path, name: &str, body: &str) -> PathBuf {
     let path = dir.join(name);
@@ -31,14 +30,6 @@ fn write_stub(dir: &Path, name: &str, body: &str) -> PathBuf {
         }
     }
     panic!("stub {name} stayed busy");
-}
-
-fn markdown_project() -> TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    git(dir.path(), &["init", "--quiet"]);
-    fs::write(dir.path().join("README.md"), "x\n").unwrap();
-    git(dir.path(), &["add", "--", "README.md"]);
-    dir
 }
 
 fn serve(root: &Path, path: &Path) -> Server {
@@ -67,27 +58,30 @@ fn wait_for(what: &str, limit: Duration, mut done: impl FnMut() -> bool) {
 }
 
 /// A browser reload (or leaving the page) while the first `/api/quality` is still waiting on
-/// `codegate capabilities` drops that request. The run it began must still be the only run: a
-/// second request must not start a second `capabilities` and a second `assess` per language.
+/// `codegate --help` drops that request. The run it began must still be the only run: a second
+/// request must not start a second `--version` and `--help`.
 #[test]
 fn a_first_request_abandoned_mid_start_does_not_start_a_second_run() {
-    let bin = bin_dir(&["git", "sleep"]);
+    let bin = bin_dir(&["sleep"]);
     let log = bin.path().join("calls.log");
     write_stub(
         bin.path(),
         "codegate",
         &format!(
             r#"[ "$1" = probe-busy ] && exit 0
-printf '%s\n' "$1 $4" >> '{log}'
-if [ "$1" = capabilities ]; then sleep 3; printf '%s' '{CAPABILITIES}'; exit 0; fi
-printf '%s' '{ASSESSMENT}'"#,
+printf '%s\n' "$*" >> '{log}'
+case "$1" in
+  --version) printf 'codegate 0.3.0\n' ;;
+  --help) sleep 3; printf '%s' '{HELP}' ;;
+  *) exit 64 ;;
+esac"#,
             log = log.display()
         ),
     );
-    let dir = markdown_project();
+    let dir = tempfile::tempdir().unwrap();
     let server = serve(dir.path(), bin.path());
 
-    // The first request, abandoned once the server is inside `codegate capabilities`.
+    // The first request, abandoned once the server is inside `codegate --help`.
     let mut first = TcpStream::connect(("127.0.0.1", server.port)).unwrap();
     write!(
         first,
@@ -95,15 +89,9 @@ printf '%s' '{ASSESSMENT}'"#,
         server.port, server.token
     )
     .unwrap();
-    wait_for(
-        "the first capabilities call",
-        Duration::from_secs(10),
-        || {
-            lines(&log)
-                .iter()
-                .any(|line| line.starts_with("capabilities"))
-        },
-    );
+    wait_for("the first --help call", Duration::from_secs(10), || {
+        lines(&log).iter().any(|line| line == "--help")
+    });
     drop(first);
     std::thread::sleep(Duration::from_millis(300));
 
@@ -111,47 +99,45 @@ printf '%s' '{ASSESSMENT}'"#,
     let response = server.get("/api/quality", &[(TOKEN_HEADER, &server.token)]);
     assert_eq!(response.status, 200, "{}", response.text());
 
-    // Long enough for an orphaned first start to finish its capabilities and run its assess.
-    std::thread::sleep(Duration::from_secs(4));
+    // Long enough for an orphaned first start to finish and a second one to begin.
+    std::thread::sleep(Duration::from_secs(1));
+    // Each request re-locates (`--version`, correction round 1); `--help` runs once.
     let calls = lines(&log);
-    let capabilities = calls
-        .iter()
-        .filter(|line| line.starts_with("capabilities"))
-        .count();
-    let assess = calls
-        .iter()
-        .filter(|line| line.ends_with("markdown"))
-        .count();
     assert_eq!(
-        (capabilities, assess),
-        (1, 1),
-        "one run expected, codegate calls: {calls:?}"
+        calls,
+        ["--version", "--help", "--version"].map(str::to_owned),
+        "one --help expected"
     );
 }
 
-/// Stopping the server (Ctrl-C, SIGTERM) while an assessment runs must not leave `codegate`
-/// running: the child leads its own process group, so nothing else stops it, and with the
-/// server gone nothing enforces the 120 s timeout either.
+/// Stopping the server (Ctrl-C, SIGTERM) while `codegate` runs must not leave it running: the
+/// child leads its own process group, so nothing else stops it, and with the server gone nothing
+/// enforces its timeout either.
 #[test]
-fn stopping_the_server_stops_a_running_assessment() {
-    let bin = bin_dir(&["git", "sleep"]);
-    let pid_file = bin.path().join("assess.pid");
+fn stopping_the_server_stops_a_running_codegate() {
+    let bin = bin_dir(&["sleep"]);
+    let pid_file = bin.path().join("help.pid");
     write_stub(
         bin.path(),
         "codegate",
         &format!(
             r#"[ "$1" = probe-busy ] && exit 0
-if [ "$1" = capabilities ]; then printf '%s' '{CAPABILITIES}'; exit 0; fi
+[ "$1" = --version ] && {{ printf 'codegate 0.3.0\n'; exit 0; }}
 echo $$ > '{pid}'
 exec sleep 30"#,
             pid = pid_file.display()
         ),
     );
-    let dir = markdown_project();
+    let dir = tempfile::tempdir().unwrap();
     let mut server = serve(dir.path(), bin.path());
-    let response = server.get("/api/quality", &[(TOKEN_HEADER, &server.token)]);
-    assert_eq!(response.status, 200, "{}", response.text());
-    wait_for("codegate assess to start", Duration::from_secs(10), || {
+    let mut request = TcpStream::connect(("127.0.0.1", server.port)).unwrap();
+    write!(
+        request,
+        "GET /api/quality HTTP/1.1\r\nHost: 127.0.0.1:{}\r\n{TOKEN_HEADER}: {}\r\n\r\n",
+        server.port, server.token
+    )
+    .unwrap();
+    wait_for("codegate --help to start", Duration::from_secs(10), || {
         fs::read_to_string(&pid_file).is_ok_and(|text| text.trim().parse::<u32>().is_ok())
     });
     let pid: u32 = fs::read_to_string(&pid_file)
@@ -168,6 +154,7 @@ exec sleep 30"#,
     wait_for("repoview to exit", Duration::from_secs(10), || {
         server.child.try_wait().unwrap().is_some()
     });
+    drop(request);
     std::thread::sleep(Duration::from_millis(500));
 
     let alive =
@@ -179,6 +166,6 @@ exec sleep 30"#,
     }
     assert!(
         !alive,
-        "codegate assess (pid {pid}) is still running after repoview exited"
+        "codegate --help (pid {pid}) is still running after repoview exited"
     );
 }

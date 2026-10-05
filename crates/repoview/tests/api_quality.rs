@@ -1,5 +1,6 @@
-//! story:quality-page: language detection, `codegate capabilities`, background assessments and
-//! `GET /api/quality`, against real directories and a stub `codegate`.
+//! story:quality-codegate: `GET /api/quality` names the beyond10x `codegate` it found, its version
+//! and the commands its `--help` lists, and says why there is no assessment. The background-run
+//! machinery kept from story:quality-page is exercised directly with a stub program.
 
 mod common;
 
@@ -14,13 +15,11 @@ use std::time::{Duration, Instant};
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode, header};
 use axum::{Extension, Router};
-use common::{bin_dir, git};
-use repoview::api::quality::{
-    ASSESS_TIMEOUT, Assessments, TOOL, detect_languages, parse_capabilities,
-};
+use common::bin_dir;
+use repoview::api::quality::{ASSESS_TIMEOUT, BackgroundRun, TOOL, parse_commands, reason};
 use repoview::assets::MemoryAssets;
 use repoview::server::{AppState, TOKEN_HEADER, new_token, router};
-use repoview_sources::Env;
+use repoview_sources::{Env, read_all};
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tower::ServiceExt;
@@ -28,39 +27,74 @@ use tower::ServiceExt;
 const PORT: u16 = 7480;
 const HOST: &str = "127.0.0.1:7480";
 
-/// What the stub's `assess` prints for markdown: an assessment document as codegate shapes it.
-const ASSESSMENT: &str = r#"{"rating":"B-","score_max":100,"scores":{"overall":67,"maintainability":67},"finding_counts":{"markdown_missing_h1":2},"top_findings":[{"kind":"markdown_missing_h1","severity":"warning","reason":"Document has no H1 title.","location":{"uri":"docs/a.md"}}]}"#;
+/// `codegate --help` of the beyond10x codegate 0.3.0, verbatim (the `evaluate` line ends in two
+/// spaces).
+const HELP_0_3_0: &str = "Evaluate normalized dependency facts against a language-neutral policy
 
-/// The capabilities the stub reports unless a test says otherwise: go and markdown, as the
-/// installed codegate does.
-const CAPABILITIES: &str = r#"[{"language":"go","name":"goast","capabilities":[]},{"language":"markdown","name":"markdown","capabilities":[]}]"#;
+Usage: codegate <COMMAND>
 
-/// A stub `codegate` in a fresh `PATH` directory that also holds the real `git` and `sleep`.
-///
-/// `capabilities` prints `capabilities`; `assess` for markdown sleeps `markdown_delay` seconds and
-/// prints [`ASSESSMENT`]; for go it fails with `go: build failed`; for anything else it prints
-/// codegate's own "not wired" error. Every call's argv is appended to `calls.log` in the dir.
+Commands:
+  evaluate
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+";
+
+const REASON_0_3_0: &str =
+    "codegate 0.3.0 evaluates supplied dependency facts only; it has no source assessment yet";
+
+/// Write an executable `/bin/sh` stub and wait until it can be executed (no ETXTBSY from a
+/// concurrently forked test thread still holding the write descriptor).
+fn write_stub(dir: &Path, name: &str, body: &str) -> PathBuf {
+    let path = dir.join(name);
+    fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    for _ in 0..200 {
+        match Command::new(&path).arg("probe-busy").output() {
+            Err(error) if error.kind() == ErrorKind::ExecutableFileBusy => {
+                std::thread::sleep(Duration::from_millis(10))
+            }
+            _ => return path,
+        }
+    }
+    panic!("stub {name} stayed busy");
+}
+
+/// A `codegate` stub in its own `PATH` directory that appends every call's argv to `calls.log`.
 struct Stub {
     dir: TempDir,
 }
 
 impl Stub {
-    fn new(capabilities: &str, markdown_delay: &str) -> Stub {
-        let dir = bin_dir(&["git", "sleep"]);
+    /// The beyond10x shape: `--version` prints `codegate <version>`, `--help` prints `help`
+    /// after `help_delay` seconds, anything else fails.
+    fn rust(version: &str, help: &str, help_delay: &str) -> Stub {
+        Stub::with_body(&format!(
+            r#"case "$1" in
+  --version) printf 'codegate {version}\n' ;;
+  --help) sleep {help_delay}; printf '%s' '{help}' ;;
+  *) printf 'unexpected call: %s\n' "$*" >&2; exit 64 ;;
+esac"#
+        ))
+    }
+
+    /// The Go shape: every flag it does not know, `--version` included, is an error with exit 1.
+    fn go() -> Stub {
+        Stub::with_body(r#"printf 'Error: unknown flag: %s\n' "$1" >&2; exit 1"#)
+    }
+
+    fn with_body(body: &str) -> Stub {
+        let dir = bin_dir(&["sleep"]);
         let log = dir.path().join("calls.log");
         let body = format!(
-            r#"printf '%s\n' "$*" >> '{log}'
-if [ "$1" = capabilities ]; then printf '%s' '{capabilities}'; exit 0; fi
-case "$4" in
-  markdown) sleep {markdown_delay}; printf '%s' '{ASSESSMENT}' ;;
-  go) printf 'go: build failed\n' >&2; exit 2 ;;
-  *) printf 'language "%s" is not wired\n' "$4" >&2; exit 1 ;;
-esac"#,
+            r#"[ "$1" = probe-busy ] && exit 0
+printf '%s\n' "$*" >> '{log}'
+{body}"#,
             log = log.display(),
         );
         write_stub(dir.path(), "codegate", &body);
-        // The readiness probe in `write_stub` ran the stub once; that call is not the test's.
-        fs::remove_file(&log).ok();
         Stub { dir }
     }
 
@@ -81,344 +115,12 @@ esac"#,
     }
 }
 
-/// Write an executable `/bin/sh` stub and wait until it can be executed (no ETXTBSY from a
-/// concurrently forked test thread still holding the write descriptor).
-fn write_stub(dir: &Path, name: &str, body: &str) -> PathBuf {
-    let path = dir.join(name);
-    fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
-    for _ in 0..200 {
-        match Command::new(&path).arg("probe-busy").output() {
-            Err(error) if error.kind() == ErrorKind::ExecutableFileBusy => {
-                std::thread::sleep(Duration::from_millis(10))
-            }
-            _ => return path,
-        }
-    }
-    panic!("stub {name} stayed busy");
+/// `PATH` made of `stubs`' directories, in order.
+fn search_path(stubs: &[&Stub]) -> std::ffi::OsString {
+    std::env::join_paths(stubs.iter().map(|stub| stub.path())).unwrap()
 }
 
-/// A Git repository with `files` written and `tracked` of them added to the index.
-fn project(files: &[&str], tracked: &[&str]) -> TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    git(dir.path(), &["init", "--quiet"]);
-    for file in files {
-        let path = dir.path().join(file);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, "x\n").unwrap();
-    }
-    if !tracked.is_empty() {
-        let mut args = vec!["add", "--"];
-        args.extend_from_slice(tracked);
-        git(dir.path(), &args);
-    }
-    dir
-}
-
-fn languages(root: &Path) -> Vec<String> {
-    let path = bin_dir(&["git"]);
-    detect_languages(&Env::with_path(root, path.path()))
-        .into_iter()
-        .map(str::to_owned)
-        .collect()
-}
-
-/// `document()` once no language is `running` any more.
-fn settled(assessments: &Arc<Assessments>) -> Value {
-    let started = Instant::now();
-    loop {
-        let document = assessments.document();
-        let running = document["languages"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|language| language["status"] == "running");
-        if !running {
-            return document;
-        }
-        assert!(
-            started.elapsed() < Duration::from_secs(20),
-            "still running: {document}"
-        );
-        std::thread::sleep(Duration::from_millis(50));
-    }
-}
-
-fn entry<'a>(document: &'a Value, language: &str) -> &'a Value {
-    document["languages"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|entry| entry["language"] == language)
-        .unwrap_or_else(|| panic!("no {language} entry in {document}"))
-}
-
-fn language_names(document: &Value) -> Vec<&str> {
-    document["languages"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|entry| entry["language"].as_str().unwrap())
-        .collect()
-}
-
-// Acceptance 1: detection from the project root.
-
-#[test]
-fn each_marker_file_detects_its_language() {
-    for (file, language) in [
-        ("go.mod", "go"),
-        ("Cargo.toml", "rust"),
-        ("package.json", "typescript"),
-        ("pom.xml", "java"),
-        ("build.gradle", "java"),
-        ("build.gradle.kts", "java"),
-    ] {
-        let dir = project(&[file], &[]);
-        assert_eq!(languages(dir.path()), vec![language.to_owned()], "{file}");
-    }
-}
-
-#[test]
-fn a_tracked_markdown_file_anywhere_detects_markdown() {
-    let dir = project(&["docs/deep/notes.md"], &["docs/deep/notes.md"]);
-    assert_eq!(languages(dir.path()), vec!["markdown".to_owned()]);
-}
-
-#[test]
-fn an_untracked_markdown_file_does_not_detect_markdown() {
-    let dir = project(&["README.md", "go.mod"], &["go.mod"]);
-    assert_eq!(languages(dir.path()), vec!["go".to_owned()]);
-}
-
-#[test]
-fn every_language_is_detected_once_in_a_fixed_order() {
-    let dir = project(
-        &[
-            "README.md",
-            "pom.xml",
-            "build.gradle",
-            "package.json",
-            "Cargo.toml",
-            "go.mod",
-        ],
-        &["README.md"],
-    );
-    assert_eq!(
-        languages(dir.path()),
-        ["go", "rust", "typescript", "java", "markdown"].map(str::to_owned)
-    );
-}
-
-#[test]
-fn an_empty_directory_has_no_languages() {
-    let dir = tempfile::tempdir().unwrap();
-    assert!(languages(dir.path()).is_empty());
-}
-
-// Acceptance 1 and 4: capabilities parsing.
-
-#[test]
-fn capabilities_are_the_language_field_of_each_entry() {
-    assert_eq!(
-        parse_capabilities(CAPABILITIES).unwrap(),
-        vec!["go".to_owned(), "markdown".to_owned()]
-    );
-}
-
-#[test]
-fn capabilities_that_are_not_a_json_array_are_an_error() {
-    for text in ["", "not json", r#"{"language":"go"}"#] {
-        let error = parse_capabilities(text).unwrap_err();
-        assert!(error.contains("codegate capabilities"), "{text:?}: {error}");
-    }
-}
-
-#[test]
-fn a_capabilities_entry_without_a_language_is_skipped() {
-    assert_eq!(
-        parse_capabilities(r#"[{"name":"x"},{"language":"go"},{"language":7}]"#).unwrap(),
-        vec!["go".to_owned()]
-    );
-}
-
-// Acceptance 2 and 4: background assessments with a stub codegate.
-
-#[test]
-fn the_assess_timeout_is_120_seconds() {
-    assert_eq!(ASSESS_TIMEOUT, Duration::from_secs(120));
-    assert_eq!(TOOL, "codegate");
-}
-
-#[test]
-fn a_supported_language_is_assessed_and_its_document_passed_through() {
-    let stub = Stub::new(CAPABILITIES, "0");
-    let dir = project(&["README.md"], &["README.md"]);
-    let env = Env::with_path(dir.path(), stub.path());
-    let document = settled(&Assessments::start(env, stub.codegate(), ASSESS_TIMEOUT));
-    assert_eq!(document["tool"], "codegate");
-    assert_eq!(
-        document["tool_path"],
-        json!(stub.codegate().to_str().unwrap())
-    );
-    let markdown = entry(&document, "markdown");
-    assert_eq!(markdown["status"], "assessed");
-    assert_eq!(markdown["reason"], Value::Null);
-    let expected: Value = serde_json::from_str(ASSESSMENT).unwrap();
-    assert_eq!(markdown["assessment"], expected);
-    let root = dir.path().to_str().unwrap();
-    assert!(
-        stub.calls().contains(&format!(
-            "--root {root} --language markdown --format json assess --gate all"
-        )),
-        "{:?}",
-        stub.calls()
-    );
-}
-
-#[test]
-fn an_unsupported_language_is_not_assessed_with_the_reason_and_never_run() {
-    let stub = Stub::new(CAPABILITIES, "0");
-    let dir = project(&["Cargo.toml", "package.json"], &[]);
-    let env = Env::with_path(dir.path(), stub.path());
-    let document = settled(&Assessments::start(env, stub.codegate(), ASSESS_TIMEOUT));
-    for language in ["rust", "typescript"] {
-        let entry = entry(&document, language);
-        assert_eq!(entry["status"], "not-assessed", "{language}");
-        assert_eq!(
-            entry["reason"],
-            json!(format!("codegate does not support {language}"))
-        );
-        assert_eq!(entry["assessment"], Value::Null, "{language}");
-    }
-    assert_eq!(stub.calls(), vec!["capabilities".to_owned()]);
-}
-
-#[test]
-fn supported_languages_come_from_capabilities_not_from_a_list() {
-    let stub = Stub::new(r#"[{"language":"rust"}]"#, "0");
-    let dir = project(&["Cargo.toml", "go.mod"], &[]);
-    let env = Env::with_path(dir.path(), stub.path());
-    let document = settled(&Assessments::start(env, stub.codegate(), ASSESS_TIMEOUT));
-    // rust is wired in this stub's capabilities, so it is assessed (the stub then fails it).
-    assert_eq!(entry(&document, "rust")["status"], "failed");
-    assert_eq!(entry(&document, "go")["status"], "not-assessed");
-    assert_eq!(
-        entry(&document, "go")["reason"],
-        "codegate does not support go"
-    );
-}
-
-#[test]
-fn a_failing_assess_is_failed_with_its_stderr_and_no_assessment() {
-    let stub = Stub::new(CAPABILITIES, "0");
-    let dir = project(&["go.mod"], &[]);
-    let env = Env::with_path(dir.path(), stub.path());
-    let document = settled(&Assessments::start(env, stub.codegate(), ASSESS_TIMEOUT));
-    let go = entry(&document, "go");
-    assert_eq!(go["status"], "failed");
-    assert_eq!(go["reason"], "codegate assess failed");
-    assert!(
-        go["stderr"].as_str().unwrap().contains("go: build failed"),
-        "{go}"
-    );
-    assert_eq!(go["assessment"], Value::Null);
-}
-
-#[test]
-fn an_assess_past_the_timeout_is_failed_and_says_so() {
-    let stub = Stub::new(CAPABILITIES, "30");
-    let dir = project(&["README.md"], &["README.md"]);
-    let env = Env::with_path(dir.path(), stub.path());
-    let started = Instant::now();
-    let document = settled(&Assessments::start(
-        env,
-        stub.codegate(),
-        Duration::from_millis(300),
-    ));
-    assert!(started.elapsed() < Duration::from_secs(10));
-    let markdown = entry(&document, "markdown");
-    assert_eq!(markdown["status"], "failed");
-    assert_eq!(
-        markdown["reason"], "codegate assess timed out after 0.3 s",
-        "{markdown}"
-    );
-    assert!(
-        markdown["stderr"].as_str().unwrap().contains("timed out"),
-        "{markdown}"
-    );
-    assert_eq!(markdown["assessment"], Value::Null);
-}
-
-#[test]
-fn an_assessment_is_running_until_it_finishes() {
-    let stub = Stub::new(CAPABILITIES, "2");
-    let dir = project(&["README.md", "Cargo.toml"], &["README.md"]);
-    let env = Env::with_path(dir.path(), stub.path());
-    let assessments = Assessments::start(env, stub.codegate(), ASSESS_TIMEOUT);
-    let first = assessments.document();
-    assert_eq!(entry(&first, "markdown")["status"], "running");
-    assert_eq!(entry(&first, "markdown")["assessment"], Value::Null);
-    assert_eq!(entry(&first, "rust")["status"], "not-assessed");
-    assert_eq!(
-        entry(&settled(&assessments), "markdown")["status"],
-        "assessed"
-    );
-}
-
-#[test]
-fn a_failing_capabilities_call_fails_every_language_with_its_stderr() {
-    let dir = project(&["go.mod", "README.md"], &["README.md"]);
-    let bin = bin_dir(&["git"]);
-    let codegate = write_stub(
-        bin.path(),
-        "codegate",
-        "printf 'capabilities broke\\n' >&2; exit 3",
-    );
-    let env = Env::with_path(dir.path(), bin.path());
-    let document = settled(&Assessments::start(env, codegate, ASSESS_TIMEOUT));
-    assert_eq!(language_names(&document), vec!["go", "markdown"]);
-    for language in ["go", "markdown"] {
-        let entry = entry(&document, language);
-        assert_eq!(entry["status"], "failed", "{language}");
-        assert_eq!(entry["reason"], "codegate capabilities failed");
-        assert!(
-            entry["stderr"]
-                .as_str()
-                .unwrap()
-                .contains("capabilities broke")
-        );
-        assert_eq!(entry["assessment"], Value::Null);
-    }
-}
-
-#[test]
-fn an_assess_that_prints_no_json_is_failed() {
-    let dir = project(&["README.md"], &["README.md"]);
-    let bin = bin_dir(&["git"]);
-    let codegate = write_stub(
-        bin.path(),
-        "codegate",
-        &format!(
-            "if [ \"$1\" = capabilities ]; then printf '%s' '{CAPABILITIES}'; exit 0; fi\n\
-             printf 'not json'"
-        ),
-    );
-    let env = Env::with_path(dir.path(), bin.path());
-    let document = settled(&Assessments::start(env, codegate, ASSESS_TIMEOUT));
-    let markdown = entry(&document, "markdown");
-    assert_eq!(markdown["status"], "failed");
-    assert_eq!(
-        markdown["reason"],
-        "codegate assess printed no JSON document"
-    );
-    assert_eq!(markdown["assessment"], Value::Null);
-}
-
-// Acceptance 2: the HTTP surface, through the router with the project handed in as
-// `Extension<Env>`, as `repoview open` layers it.
-
-fn app(root: &Path, path: &Path) -> (Router, String) {
+fn app(root: &Path, path: impl Into<std::ffi::OsString>) -> (Router, String) {
     let token = new_token();
     let state = AppState {
         token: token.clone(),
@@ -447,117 +149,390 @@ async fn get_quality(app: &Router, token: Option<&str>) -> (StatusCode, Value) {
     (status, value)
 }
 
+fn not_found() -> Value {
+    json!({ "tool": "codegate", "exit": null, "stderr": "beyond10x codegate not found on PATH" })
+}
+
+// Acceptance 2: `commands` from `codegate --help`, and the reason.
+
+#[test]
+fn the_commands_of_codegate_0_3_0_are_evaluate() {
+    assert_eq!(parse_commands(HELP_0_3_0), vec!["evaluate".to_owned()]);
+}
+
+#[test]
+fn commands_are_every_entry_of_the_commands_section_but_help() {
+    let help = "About\n\nUsage: codegate <COMMAND>\n\nCommands:\n  evaluate  Evaluate facts\n  \
+                assess    Assess a tree\n            that wraps\n  help      Print help\n\n\
+                Options:\n  -h, --help  Print help\n";
+    assert_eq!(
+        parse_commands(help),
+        vec!["evaluate".to_owned(), "assess".to_owned()]
+    );
+}
+
+#[test]
+fn help_without_a_commands_section_lists_no_commands() {
+    assert!(parse_commands("Usage: codegate [OPTIONS]\n\nOptions:\n  -h  Print help\n").is_empty());
+    assert!(parse_commands("").is_empty());
+}
+
+#[test]
+fn the_reason_for_codegate_0_3_0_is_the_story_text() {
+    assert_eq!(reason("0.3.0", &["evaluate".to_owned()]), REASON_0_3_0);
+}
+
+#[test]
+fn a_reason_names_the_version_and_says_there_is_no_source_assessment() {
+    // Correction round 1: a command beyond `evaluate` may assess; the reason must not say none does.
+    assert_eq!(
+        reason("0.9.1", &["evaluate".to_owned(), "lint".to_owned()]),
+        "codegate 0.9.1 offers evaluate, lint; repoview does not read an assessment from it yet"
+    );
+    assert_eq!(
+        reason("0.9.1", &[]),
+        "codegate 0.9.1 offers no commands; it has no source assessment yet"
+    );
+}
+
+// Acceptance 2: the HTTP surface, through the router with the project handed in as
+// `Extension<Env>`, as `repoview open` layers it.
+
 #[tokio::test(flavor = "multi_thread")]
-async fn without_codegate_on_path_the_api_is_503_naming_the_tool() {
-    let dir = project(&["go.mod"], &[]);
-    let bin = bin_dir(&["git"]);
-    let (app, token) = app(dir.path(), bin.path());
+async fn the_api_names_the_rust_codegate_its_version_commands_and_reason() {
+    let stub = Stub::rust("0.3.0", HELP_0_3_0, "0");
+    let dir = tempfile::tempdir().unwrap();
+    let (app, token) = app(dir.path(), stub.path());
     let (status, body) = get_quality(&app, Some(&token)).await;
-    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(
         body,
-        json!({ "tool": "codegate", "exit": null, "stderr": "codegate not found on PATH" })
+        json!({
+            "tool": "codegate",
+            "tool_path": stub.codegate().to_str().unwrap(),
+            "tool_version": "0.3.0",
+            "skipped": [],
+            "commands": ["evaluate"],
+            "assessment": null,
+            "reason": REASON_0_3_0,
+        })
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_go_codegate_before_the_rust_one_is_skipped_and_named() {
+    let go = Stub::go();
+    let rust = Stub::rust("0.3.0", HELP_0_3_0, "0");
+    let dir = tempfile::tempdir().unwrap();
+    let (app, token) = app(dir.path(), search_path(&[&go, &rust]));
+    let (status, body) = get_quality(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["tool_path"], json!(rust.codegate().to_str().unwrap()));
+    assert_eq!(body["skipped"], json!([go.codegate().to_str().unwrap()]));
+    // The Go codegate is asked for its version and nothing else.
+    assert_eq!(go.calls(), vec!["--version".to_owned()]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn only_a_go_codegate_is_503_beyond10x_codegate_not_found() {
+    let go = Stub::go();
+    let dir = tempfile::tempdir().unwrap();
+    let (app, token) = app(dir.path(), go.path());
+    let (status, body) = get_quality(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body, not_found());
+    assert_eq!(go.calls(), vec!["--version".to_owned()]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn no_codegate_on_path_is_503_beyond10x_codegate_not_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let empty = tempfile::tempdir().unwrap();
+    let (app, token) = app(dir.path(), empty.path());
+    let (status, body) = get_quality(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body, not_found());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn commands_come_from_help_not_from_a_list() {
+    let help = "Usage: codegate <COMMAND>\n\nCommands:\n  evaluate  x\n  survey    y\n  help  z\n";
+    let stub = Stub::rust("0.4.0-dev", help, "0");
+    let dir = tempfile::tempdir().unwrap();
+    let (app, token) = app(dir.path(), stub.path());
+    let (status, body) = get_quality(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["commands"], json!(["evaluate", "survey"]));
+    assert_eq!(body["tool_version"], "0.4.0-dev");
+    assert_eq!(body["assessment"], Value::Null);
+    assert_eq!(
+        body["reason"],
+        json!(reason(
+            "0.4.0-dev",
+            &["evaluate".to_owned(), "survey".to_owned()]
+        ))
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failing_help_is_502_with_its_stderr() {
+    let stub = Stub::with_body(
+        r#"case "$1" in
+  --version) printf 'codegate 0.3.0\n' ;;
+  *) printf 'help broke\n' >&2; exit 3 ;;
+esac"#,
+    );
+    let dir = tempfile::tempdir().unwrap();
+    let (app, token) = app(dir.path(), stub.path());
+    let (status, body) = get_quality(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY, "{body}");
+    assert_eq!(body["tool"], "codegate");
+    assert_eq!(body["exit"], Value::Null);
+    assert!(
+        body["stderr"].as_str().unwrap().contains("help broke"),
+        "{body}"
     );
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_api_refuses_a_request_without_the_token() {
-    let stub = Stub::new(CAPABILITIES, "0");
-    let dir = project(&["go.mod"], &[]);
+    let stub = Stub::rust("0.3.0", HELP_0_3_0, "0");
+    let dir = tempfile::tempdir().unwrap();
     let (app, _) = app(dir.path(), stub.path());
     let (status, _) = get_quality(&app, None).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert!(stub.calls().is_empty(), "{:?}", stub.calls());
 }
 
+// Acceptance 4: the API and the snapshot's `quality` source report the same binary and version.
+
 #[tokio::test(flavor = "multi_thread")]
-async fn the_api_answers_running_then_every_language_with_its_status() {
-    let stub = Stub::new(CAPABILITIES, "2");
-    let dir = project(&["README.md", "go.mod", "Cargo.toml"], &["README.md"]);
-    let (app, token) = app(dir.path(), stub.path());
-    let (status, first) = get_quality(&app, Some(&token)).await;
-    assert_eq!(status, StatusCode::OK, "{first}");
-    assert_eq!(first["tool"], "codegate");
-    assert_eq!(first["tool_path"], json!(stub.codegate().to_str().unwrap()));
-    assert_eq!(language_names(&first), vec!["go", "rust", "markdown"]);
-    assert_eq!(entry(&first, "markdown")["status"], "running");
-    let started = Instant::now();
-    let done = loop {
-        let (status, document) = get_quality(&app, Some(&token)).await;
-        assert_eq!(status, StatusCode::OK);
-        if entry(&document, "markdown")["status"] != "running" {
-            break document;
-        }
-        assert!(started.elapsed() < Duration::from_secs(20), "{document}");
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    };
-    assert_eq!(entry(&done, "markdown")["status"], "assessed");
-    assert_eq!(
-        entry(&done, "markdown")["assessment"],
-        serde_json::from_str::<Value>(ASSESSMENT).unwrap()
-    );
-    assert_eq!(entry(&done, "go")["status"], "failed");
-    assert_eq!(entry(&done, "rust")["status"], "not-assessed");
-    // One capabilities call and one assess per supported language, however often it is polled.
-    let calls = stub.calls();
-    assert_eq!(
-        calls.iter().filter(|call| *call == "capabilities").count(),
-        1
-    );
-    assert_eq!(calls.len(), 3, "{calls:?}");
+async fn the_api_and_the_snapshot_source_report_the_same_binary_and_version() {
+    let go = Stub::go();
+    let rust = Stub::rust("0.3.0", HELP_0_3_0, "0");
+    let dir = tempfile::tempdir().unwrap();
+    let path = search_path(&[&go, &rust]);
+    let (app, token) = app(dir.path(), path.clone());
+    let (status, body) = get_quality(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let section = read_all(&Env::with_path(dir.path(), path))
+        .into_iter()
+        .find(|section| section.source_id == "quality")
+        .unwrap();
+    assert_eq!(body["tool_path"], json!(section.tool_path));
+    assert_eq!(body["tool_version"], json!(section.tool_version));
+    assert_eq!(body["skipped"], section.summary["skipped"]);
 }
 
-/// Round 1: a first request dropped while the run is starting (here: inside a slow
-/// `codegate capabilities`) must not let a second request start a second run.
+// Acceptance 5: no assessment process starts, and the probe runs once per server run.
+
+#[tokio::test(flavor = "multi_thread")]
+async fn no_assessment_process_starts_however_often_the_page_asks() {
+    let stub = Stub::rust("0.3.0", HELP_0_3_0, "0");
+    let dir = tempfile::tempdir().unwrap();
+    let (app, token) = app(dir.path(), stub.path());
+    for _ in 0..3 {
+        let (status, body) = get_quality(&app, Some(&token)).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["assessment"], Value::Null);
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Correction round 1: every request re-locates (`--version`); `--help` runs once while the
+    // located binary stays the same, and nothing else is ever started.
+    assert_eq!(probe_calls(&stub), (3, 1), "{:?}", stub.calls());
+}
+
+/// `(--version calls, --help calls)` of `stub`, asserting it was asked nothing else.
+fn probe_calls(stub: &Stub) -> (usize, usize) {
+    let calls = stub.calls();
+    assert!(
+        calls
+            .iter()
+            .all(|call| call == "--version" || call == "--help"),
+        "{calls:?}"
+    );
+    let versions = calls.iter().filter(|call| *call == "--version").count();
+    (versions, calls.len() - versions)
+}
+
+/// Correction round 1: a `codegate` removed from `PATH` while the server runs is not reported
+/// as found any longer.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_codegate_removed_while_the_server_runs_is_no_longer_found() {
+    let stub = Stub::rust("0.3.0", HELP_0_3_0, "0");
+    let dir = tempfile::tempdir().unwrap();
+    let (app, token) = app(dir.path(), stub.path());
+    let (status, body) = get_quality(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    fs::remove_file(stub.codegate()).unwrap();
+    let (status, body) = get_quality(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body, not_found());
+}
+
+/// Correction round 1: a different binary at the same path (an in-place upgrade whose help
+/// changed) is probed again, and its commands are the new ones.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_upgraded_codegate_is_probed_again() {
+    let stub = Stub::rust("0.3.0", HELP_0_3_0, "0");
+    let dir = tempfile::tempdir().unwrap();
+    let (app, token) = app(dir.path(), stub.path());
+    let (_, first) = get_quality(&app, Some(&token)).await;
+    assert_eq!(first["commands"], json!(["evaluate"]));
+    let help = "Commands:\n  evaluate  x\n  survey    y\n";
+    let upgraded = Stub::rust("0.4.0", help, "0");
+    fs::copy(upgraded.codegate(), stub.codegate()).unwrap();
+    // Wait out ETXTBSY from a concurrently forked test thread still holding the write descriptor.
+    for _ in 0..200 {
+        match Command::new(stub.codegate()).arg("probe-busy").output() {
+            Err(error) if error.kind() == ErrorKind::ExecutableFileBusy => {
+                std::thread::sleep(Duration::from_millis(10))
+            }
+            _ => break,
+        }
+    }
+    let (status, second) = get_quality(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::OK, "{second}");
+    assert_eq!(second["tool_version"], "0.4.0");
+    assert_eq!(second["commands"], json!(["evaluate", "survey"]));
+}
+
+/// Correction round 1: ANSI styling in `--help` (clap colours it under `CLICOLOR_FORCE`) does
+/// not hide a command.
+#[test]
+fn ansi_styling_in_help_is_ignored() {
+    let help = "\u{1b}[1m\u{1b}[4mCommands:\u{1b}[0m\n  \u{1b}[1mevaluate\u{1b}[0m  \n  \
+                \u{1b}[1mhelp\u{1b}[0m      Print help\n";
+    assert_eq!(parse_commands(help), vec!["evaluate".to_owned()]);
+}
+
+/// Round 1 of story:quality-page, kept: a first request dropped while the run is starting (here:
+/// inside a slow `codegate --help`) must not let a second request start a second probe.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_request_dropped_while_the_run_starts_leaves_exactly_one_run() {
-    let bin = bin_dir(&["git", "sleep"]);
-    let log = bin.path().join("calls.log");
-    write_stub(
-        bin.path(),
-        "codegate",
-        &format!(
-            r#"[ "$1" = probe-busy ] && exit 0
-printf '%s\n' "$1 $4" >> '{log}'
-if [ "$1" = capabilities ]; then sleep 2; printf '%s' '{CAPABILITIES}'; exit 0; fi
-printf '%s' '{ASSESSMENT}'"#,
-            log = log.display()
-        ),
-    );
-    let dir = project(&["README.md"], &["README.md"]);
-    let (app, token) = app(dir.path(), bin.path());
+    let stub = Stub::rust("0.3.0", HELP_0_3_0, "2");
+    let dir = tempfile::tempdir().unwrap();
+    let (app, token) = app(dir.path(), stub.path());
     let first = {
         let (app, token) = (app.clone(), token.clone());
         tokio::spawn(async move { get_quality(&app, Some(&token)).await })
     };
     let started = Instant::now();
-    while !fs::read_to_string(&log).is_ok_and(|text| text.contains("capabilities")) {
+    while !stub.calls().iter().any(|call| call == "--help") {
         assert!(
             started.elapsed() < Duration::from_secs(10),
-            "no capabilities call"
+            "no --help call"
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
     first.abort();
     let _ = first.await;
-    let (status, _) = get_quality(&app, Some(&token)).await;
-    assert_eq!(status, StatusCode::OK);
-    tokio::time::sleep(Duration::from_secs(3)).await;
-    let calls = fs::read_to_string(&log).unwrap();
-    assert_eq!(
-        calls
-            .lines()
-            .filter(|line| line.starts_with("capabilities"))
-            .count(),
-        1,
-        "{calls}"
+    let (status, body) = get_quality(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["commands"], json!(["evaluate"]));
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(probe_calls(&stub), (2, 1), "{:?}", stub.calls());
+}
+
+// Acceptance 5: the background-run machinery, kept for the assessment command a later codegate
+// release adds, run directly against a stub program.
+
+/// `document()` once the run is no longer `running`.
+fn settled(run: &Arc<BackgroundRun>) -> Value {
+    let started = Instant::now();
+    loop {
+        let document = run.document();
+        if document["status"] != "running" {
+            return document;
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "still running: {document}"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn program(body: &str) -> (TempDir, PathBuf) {
+    let bin = bin_dir(&["sleep"]);
+    let path = write_stub(bin.path(), "assessor", body);
+    (bin, path)
+}
+
+/// Start `program assess` with `bin` as both the project root and `PATH`, so the root outlives
+/// the run.
+fn start(bin: &TempDir, program: PathBuf, timeout: Duration) -> Arc<BackgroundRun> {
+    let env = Env::with_path(bin.path(), bin.path());
+    BackgroundRun::start(env, program, vec!["assess".to_owned()], timeout)
+}
+
+#[test]
+fn the_assess_timeout_is_120_seconds() {
+    assert_eq!(ASSESS_TIMEOUT, Duration::from_secs(120));
+    assert_eq!(TOOL, "codegate");
+}
+
+#[test]
+fn a_run_that_prints_json_is_assessed_and_its_document_passed_through() {
+    let (bin, path) = program(r#"[ "$1" = assess ] || exit 9; printf '{"rating":"B-"}'"#);
+    let document = settled(&start(&bin, path, ASSESS_TIMEOUT));
+    assert_eq!(document["status"], "assessed");
+    assert_eq!(document["assessment"], json!({ "rating": "B-" }));
+    assert_eq!(document["reason"], Value::Null);
+}
+
+#[test]
+fn a_run_is_running_until_it_finishes() {
+    let (bin, path) = program("sleep 2; printf '{}'");
+    let run = start(&bin, path, ASSESS_TIMEOUT);
+    let first = run.document();
+    assert_eq!(first["status"], "running");
+    assert_eq!(first["assessment"], Value::Null);
+    assert_eq!(settled(&run)["status"], "assessed");
+}
+
+#[test]
+fn a_failing_run_is_failed_with_its_stderr_and_no_assessment() {
+    let (bin, path) = program("printf 'build failed\\n' >&2; exit 2");
+    let document = settled(&start(&bin, path, ASSESS_TIMEOUT));
+    assert_eq!(document["status"], "failed");
+    assert_eq!(document["reason"], "codegate assess failed");
+    assert!(
+        document["stderr"]
+            .as_str()
+            .unwrap()
+            .contains("build failed"),
+        "{document}"
     );
+    assert_eq!(document["assessment"], Value::Null);
+}
+
+#[test]
+fn a_run_past_the_timeout_is_failed_and_says_so() {
+    let (bin, path) = program("sleep 30");
+    let started = Instant::now();
+    let document = settled(&start(&bin, path, Duration::from_millis(300)));
+    assert!(started.elapsed() < Duration::from_secs(10));
+    assert_eq!(document["status"], "failed");
     assert_eq!(
-        calls
-            .lines()
-            .filter(|line| line.ends_with("markdown"))
-            .count(),
-        1,
-        "{calls}"
+        document["reason"], "codegate assess timed out after 0.3 s",
+        "{document}"
     );
+    assert!(
+        document["stderr"].as_str().unwrap().contains("timed out"),
+        "{document}"
+    );
+    assert_eq!(document["assessment"], Value::Null);
+}
+
+#[test]
+fn a_run_that_prints_no_json_is_failed() {
+    let (bin, path) = program("printf 'not json'");
+    let document = settled(&start(&bin, path, ASSESS_TIMEOUT));
+    assert_eq!(document["status"], "failed");
+    assert_eq!(
+        document["reason"],
+        "codegate assess printed no JSON document"
+    );
+    assert_eq!(document["assessment"], Value::Null);
 }

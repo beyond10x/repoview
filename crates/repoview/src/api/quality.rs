@@ -1,30 +1,33 @@
-//! `GET /api/quality`: Codegate assessments per language, or why there is none.
+//! `GET /api/quality`: what the beyond10x Codegate on `PATH` can say about the project.
 //!
-//! Languages are detected from marker files at the project root; which of them Codegate supports
-//! is read from `codegate capabilities`, never from a list here. The first request starts one
-//! `codegate assess` per supported language in the background and answers at once; each language
-//! is `running` until its assessment finishes, fails or times out. Later requests read the same
-//! run. The project arrives as the `Extension<Env>` that `repoview open` layers over the router.
+//! Every request locates `codegate` with the same locator the snapshot's `quality` source uses
+//! ([`Codegate::locate_with`]); the commands it offers are read from `codegate --help`, never
+//! from a list here, once per located binary. The answer names the binary, its version, every
+//! `codegate` skipped on the way, and why there is no assessment: no Codegate release has a
+//! source assessment yet, so none is started. Every `codegate` child runs with colour off. The
+//! project arrives as the `Extension<Env>` that `repoview open` layers over the router.
 //!
-//! Every `codegate` child leads its own process group and is registered while it runs, so
-//! [`shutdown`] (also installed as a process-exit hook) kills whatever is still running when the
-//! server stops.
+//! [`BackgroundRun`] is the run machinery kept for the assessment command a later Codegate
+//! release adds: started once, read by every later request. Every `codegate` child (the probe's
+//! too) leads its own process group and is registered while it runs, so [`shutdown`] (also
+//! installed as a process-exit hook) kills whatever is still running when the server stops.
 
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
+use std::os::unix::fs::MetadataExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
-use std::sync::{Arc, LazyLock, Mutex, MutexGuard, Once, OnceLock, PoisonError};
-use std::time::{Duration, Instant};
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard, Once, PoisonError};
+use std::time::{Duration, Instant, SystemTime};
 
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::get;
 use axum::{Extension, Router};
-use repoview_sources::{Env, Outcome, TIMEOUT, run, truncate_diagnostic};
+use repoview_sources::{Codegate, CodegateSearch, Env, Outcome, TIMEOUT, truncate_diagnostic};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -33,96 +36,211 @@ use crate::server::AppState;
 /// The assessing tool, as it is looked up on `PATH` and named on the wire.
 pub const TOOL: &str = "codegate";
 
-/// How long one `codegate assess` may run.
+/// How long one background `codegate` run may take.
 pub const ASSESS_TIMEOUT: Duration = Duration::from_secs(120);
-
-/// Marker files at the project root, in wire order. `build.gradle*` is matched as a prefix.
-const MARKERS: [(&str, &str); 5] = [
-    ("go.mod", "go"),
-    ("Cargo.toml", "rust"),
-    ("package.json", "typescript"),
-    ("pom.xml", "java"),
-    ("build.gradle", "java"),
-];
 
 pub fn routes() -> Router<AppState> {
     Router::new().route("/api/quality", get(quality))
 }
 
-/// The languages of the project at `env.root`, each once, in the order of [`MARKERS`], then
-/// `markdown` when Git tracks any `*.md` file.
-pub fn detect_languages(env: &Env) -> Vec<&'static str> {
-    let names: Vec<String> = std::fs::read_dir(env.root())
-        .map(|entries| {
-            entries
-                .filter_map(Result::ok)
-                .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
-                .map(|entry| entry.file_name().to_string_lossy().into_owned())
-                .collect()
-        })
-        .unwrap_or_default();
-    let mut languages = Vec::new();
-    for (marker, language) in MARKERS {
-        let present = names.iter().any(|name| {
-            name == marker || (marker == "build.gradle" && name.starts_with("build.gradle"))
-        });
-        if present && !languages.contains(&language) {
-            languages.push(language);
+/// The subcommands in the `Commands:` section of `codegate --help`, in order, without clap's own
+/// `help`. A command line is indented by exactly two spaces; deeper lines continue a description.
+/// ANSI styling (clap colours help under `CLICOLOR_FORCE`) is removed first.
+pub fn parse_commands(help: &str) -> Vec<String> {
+    strip_ansi(help)
+        .lines()
+        .skip_while(|line| line.trim_end() != "Commands:")
+        .skip(1)
+        .take_while(|line| !line.trim().is_empty())
+        .filter_map(|line| line.strip_prefix("  "))
+        .filter(|line| !line.starts_with(' '))
+        .filter_map(|line| line.split_whitespace().next())
+        .filter(|name| *name != "help")
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Why `codegate <version>`, offering `commands`, gives no assessment of the project. Only a
+/// codegate offering nothing beyond `evaluate` is said to have no source assessment; any other
+/// command may assess, so then the reason says repoview does not read one yet.
+pub fn reason(version: &str, commands: &[String]) -> String {
+    if commands == ["evaluate"] {
+        format!(
+            "{TOOL} {version} evaluates supplied dependency facts only; it has no source \
+             assessment yet"
+        )
+    } else if commands.is_empty() {
+        format!("{TOOL} {version} offers no commands; it has no source assessment yet")
+    } else {
+        format!(
+            "{TOOL} {version} offers {}; repoview does not read an assessment from it yet",
+            commands.join(", ")
+        )
+    }
+}
+
+/// `text` without ANSI escape sequences: CSI (`ESC [ … final`), OSC (`ESC ] … BEL` or
+/// `ESC ] … ESC \`) and two-byte escapes.
+fn strip_ansi(text: &str) -> String {
+    let mut plain = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(next) = chars.next() {
+        if next != '\u{1b}' {
+            plain.push(next);
+            continue;
+        }
+        match chars.next() {
+            Some('[') => {
+                for byte in chars.by_ref() {
+                    if ('@'..='~').contains(&byte) {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                while let Some(byte) = chars.next() {
+                    if byte == '\u{7}' {
+                        break;
+                    }
+                    if byte == '\u{1b}' {
+                        chars.next();
+                        break;
+                    }
+                }
+            }
+            _ => {}
         }
     }
-    if tracks_markdown(env) {
-        languages.push("markdown");
+    plain
+}
+
+/// The binary an [`Offer`] was read from: its path, what its `--version` said, and its file's
+/// device, inode, size, modification time and status-change time. A replaced file (a new inode
+/// from `mv` or a package manager), a rewrite in place (size, mtime, ctime) and a new version
+/// each change it, so `--help` is read again.
+#[derive(Debug, PartialEq, Eq)]
+struct Identity {
+    path: PathBuf,
+    version: String,
+    file: Option<FileIdentity>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct FileIdentity {
+    dev: u64,
+    ino: u64,
+    len: u64,
+    modified: Option<SystemTime>,
+    changed: (i64, i64),
+}
+
+impl Identity {
+    fn of(codegate: &Codegate) -> Identity {
+        let file = std::fs::metadata(&codegate.path)
+            .ok()
+            .map(|meta| FileIdentity {
+                dev: meta.dev(),
+                ino: meta.ino(),
+                len: meta.len(),
+                modified: meta.modified().ok(),
+                changed: (meta.ctime(), meta.ctime_nsec()),
+            });
+        Identity {
+            path: codegate.path.clone(),
+            version: codegate.version.clone(),
+            file,
+        }
     }
-    languages
 }
 
-fn tracks_markdown(env: &Env) -> bool {
-    let Some(git) = env.find_tool("git") else {
-        return false;
-    };
-    matches!(
-        run(env, &git, &["ls-files", "-z", "--", "*.md"], TIMEOUT),
-        Outcome::Success { stdout } if !stdout.is_empty()
-    )
+/// What one binary offers: the commands its `--help` lists, and the assessment run, if one was
+/// started.
+struct Offer {
+    identity: Identity,
+    commands: Vec<String>,
+    /// Always `None` until a Codegate release has a source assessment command.
+    assessment: Option<Arc<BackgroundRun>>,
 }
 
-/// The `language` field of each entry of `codegate capabilities` output. An entry without a
-/// string `language` is skipped; output that is not a JSON array is an error.
-pub fn parse_capabilities(stdout: &str) -> Result<Vec<String>, String> {
-    let value: Value = serde_json::from_str(stdout)
-        .map_err(|error| format!("codegate capabilities printed no JSON document: {error}"))?;
-    let Value::Array(entries) = value else {
-        return Err("codegate capabilities printed no JSON array".to_owned());
-    };
-    Ok(entries
+/// Locate `codegate` with the snapshot's locator, each `--version` registered for [`shutdown`].
+fn locate(env: &Env) -> CodegateSearch {
+    Codegate::locate_with(env, |candidate| {
+        match run_codegate(env, candidate, &["--version"], TIMEOUT) {
+            Run::Success(stdout) => Outcome::Success { stdout },
+            Run::Failure(diagnostic) | Run::TimedOut(diagnostic) => Outcome::Failure { diagnostic },
+        }
+    })
+}
+
+/// The commands `codegate --help` lists, for the binary identified as `identity` before it ran.
+/// The second value says whether the offer may be cached: not when the file changed while
+/// `--help` ran, since its output may then be the old binary's. The error is the answer's
+/// status and stderr.
+fn read_offer(
+    env: &Env,
+    codegate: &Codegate,
+    identity: Identity,
+) -> Result<(Offer, bool), (StatusCode, String)> {
+    match run_codegate(env, &codegate.path, &["--help"], TIMEOUT) {
+        Run::Success(stdout) => {
+            let unchanged = Identity::of(codegate) == identity;
+            let offer = Offer {
+                identity,
+                commands: parse_commands(&stdout),
+                assessment: None,
+            };
+            Ok((offer, unchanged))
+        }
+        Run::Failure(diagnostic) | Run::TimedOut(diagnostic) => {
+            Err((StatusCode::BAD_GATEWAY, diagnostic))
+        }
+    }
+}
+
+/// The `/api/quality` document for `codegate`, found after `skipped`, offering `offer`.
+fn document(codegate: &Codegate, skipped: &[PathBuf], offer: &Offer) -> Value {
+    let skipped: Vec<_> = skipped
         .iter()
-        .filter_map(|entry| entry.get("language")?.as_str().map(str::to_owned))
-        .collect())
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect();
+    let (assessment, reason) = match &offer.assessment {
+        Some(run) => (run.document(), Value::Null),
+        None => (
+            Value::Null,
+            json!(reason(&codegate.version, &offer.commands)),
+        ),
+    };
+    json!({
+        "tool": TOOL,
+        "tool_path": codegate.path.to_string_lossy(),
+        "tool_version": codegate.version,
+        "skipped": skipped,
+        "commands": offer.commands,
+        "assessment": assessment,
+        "reason": reason,
+    })
 }
 
-/// `repoview.quality` status of one language on the wire.
+/// Status of a [`BackgroundRun`] on the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum Status {
     Assessed,
-    NotAssessed,
     Failed,
     Running,
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct LanguageEntry {
-    language: String,
+struct RunDocument {
     status: Status,
     reason: Option<String>,
     stderr: Option<String>,
     assessment: Option<Value>,
 }
 
-impl LanguageEntry {
-    fn new(language: &str, status: Status) -> LanguageEntry {
-        LanguageEntry {
-            language: language.to_owned(),
+impl RunDocument {
+    fn new(status: Status) -> RunDocument {
+        RunDocument {
             status,
             reason: None,
             stderr: None,
@@ -130,118 +248,71 @@ impl LanguageEntry {
         }
     }
 
-    fn failed(language: &str, reason: String, stderr: String) -> LanguageEntry {
-        LanguageEntry {
+    fn failed(reason: String, stderr: String) -> RunDocument {
+        RunDocument {
             reason: Some(reason),
             stderr: Some(stderr),
-            ..LanguageEntry::new(language, Status::Failed)
+            ..RunDocument::new(Status::Failed)
         }
     }
 }
 
-/// One run of every assessment for a project: started once, read by every later request.
-pub struct Assessments {
-    tool_path: PathBuf,
-    languages: Mutex<Vec<LanguageEntry>>,
+/// One background `codegate` run whose stdout is a JSON document: started once, read by every
+/// later request.
+pub struct BackgroundRun {
+    state: Mutex<RunDocument>,
 }
 
-impl Assessments {
-    /// Detect the languages, read `codegate capabilities`, and start one `assess` per supported
-    /// language on its own thread, each bounded by `timeout`. Returns once they are started.
-    pub fn start(env: Env, tool_path: PathBuf, timeout: Duration) -> Arc<Assessments> {
-        let detected = detect_languages(&env);
-        let supported = match run_codegate(&env, &tool_path, &["capabilities"], TIMEOUT) {
-            Run::Success(stdout) => parse_capabilities(&stdout),
-            Run::Failure(diagnostic) | Run::TimedOut(diagnostic) => Err(diagnostic),
-        };
-        let entries = detected
-            .iter()
-            .map(|&language| match &supported {
-                Err(diagnostic) => LanguageEntry::failed(
-                    language,
-                    format!("{TOOL} capabilities failed"),
-                    diagnostic.clone(),
-                ),
-                Ok(supported) if supported.iter().any(|name| name == language) => {
-                    LanguageEntry::new(language, Status::Running)
-                }
-                Ok(_) => LanguageEntry {
-                    reason: Some(format!("{TOOL} does not support {language}")),
-                    ..LanguageEntry::new(language, Status::NotAssessed)
-                },
-            })
-            .collect::<Vec<_>>();
-        let assessments = Arc::new(Assessments {
-            tool_path,
-            languages: Mutex::new(entries.clone()),
+impl BackgroundRun {
+    /// Start `program args…` on its own thread, bounded by `timeout`, and return at once. The
+    /// run is `running` until it finishes, fails or times out.
+    pub fn start(
+        env: Env,
+        program: PathBuf,
+        args: Vec<String>,
+        timeout: Duration,
+    ) -> Arc<BackgroundRun> {
+        let run = Arc::new(BackgroundRun {
+            state: Mutex::new(RunDocument::new(Status::Running)),
         });
-        let env = Arc::new(env);
-        for (index, entry) in entries.iter().enumerate() {
-            if entry.status != Status::Running {
-                continue;
-            }
-            let language = entry.language.clone();
-            let env = Arc::clone(&env);
-            let assessments = Arc::clone(&assessments);
-            std::thread::spawn(move || {
-                let finished = assess(&env, &assessments.tool_path, &language, timeout);
-                assessments.lock()[index] = finished;
-            });
-        }
-        assessments
+        let running = Arc::clone(&run);
+        std::thread::spawn(move || {
+            let finished = execute(&env, &program, &args, timeout);
+            *running.lock() = finished;
+        });
+        run
     }
 
-    /// The `/api/quality` document as it stands now.
+    /// `{ status, reason, stderr, assessment }` as it stands now.
     pub fn document(&self) -> Value {
-        json!({
-            "tool": TOOL,
-            "tool_path": self.tool_path.to_string_lossy(),
-            "languages": *self.lock(),
-        })
+        serde_json::to_value(&*self.lock()).unwrap_or(Value::Null)
     }
 
-    fn lock(&self) -> MutexGuard<'_, Vec<LanguageEntry>> {
-        self.languages
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+    fn lock(&self) -> MutexGuard<'_, RunDocument> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 
-/// `codegate --root <root> --language <language> --format json assess --gate all`, its JSON
-/// passed through unchanged.
-fn assess(env: &Env, tool_path: &Path, language: &str, timeout: Duration) -> LanguageEntry {
-    let root = env.root().to_string_lossy();
-    let args = [
-        "--root",
-        &root,
-        "--language",
-        language,
-        "--format",
-        "json",
-        "assess",
-        "--gate",
-        "all",
-    ];
-    match run_codegate(env, tool_path, &args, timeout) {
+/// `program args…`, its JSON passed through unchanged.
+fn execute(env: &Env, program: &Path, args: &[String], timeout: Duration) -> RunDocument {
+    let label = format!("{TOOL} {}", args.join(" "));
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    match run_codegate(env, program, &args, timeout) {
         Run::Success(stdout) => match serde_json::from_str::<Value>(&stdout) {
-            Ok(assessment) => LanguageEntry {
+            Ok(assessment) => RunDocument {
                 assessment: Some(assessment),
-                ..LanguageEntry::new(language, Status::Assessed)
+                ..RunDocument::new(Status::Assessed)
             },
-            Err(error) => LanguageEntry::failed(
-                language,
-                format!("{TOOL} assess printed no JSON document"),
+            Err(error) => RunDocument::failed(
+                format!("{label} printed no JSON document"),
                 error.to_string(),
             ),
         },
-        Run::TimedOut(diagnostic) => LanguageEntry::failed(
-            language,
-            format!("{TOOL} assess timed out after {} s", timeout.as_secs_f64()),
+        Run::TimedOut(diagnostic) => RunDocument::failed(
+            format!("{label} timed out after {} s", timeout.as_secs_f64()),
             diagnostic,
         ),
-        Run::Failure(diagnostic) => {
-            LanguageEntry::failed(language, format!("{TOOL} assess failed"), diagnostic)
-        }
+        Run::Failure(diagnostic) => RunDocument::failed(format!("{label} failed"), diagnostic),
     }
 }
 
@@ -329,8 +400,8 @@ impl Drop for Registered {
 }
 
 /// Run `program args…` as `repoview_sources::run` does (no shell, `current_dir` at the root, the
-/// env's `PATH`, its own process group killed at `timeout`), with the group registered for
-/// [`shutdown`] while it runs.
+/// env's `PATH`, its own process group killed at `timeout`), with colour off and the group
+/// registered for [`shutdown`] while it runs.
 fn run_codegate(env: &Env, program: &Path, args: &[&str], timeout: Duration) -> Run {
     install_exit_hook();
     let deadline = Instant::now() + timeout;
@@ -339,6 +410,12 @@ fn run_codegate(env: &Env, program: &Path, args: &[&str], timeout: Duration) -> 
         .args(args)
         .current_dir(env.root())
         .env("GIT_OPTIONAL_LOCKS", "0")
+        // Plain output whatever the user's shell says: clap colours help under any set
+        // CLICOLOR_FORCE, `0` included, unless NO_COLOR is set; so drop it and set NO_COLOR.
+        .env_remove("CLICOLOR_FORCE")
+        .env("NO_COLOR", "1")
+        .env("CLICOLOR", "0")
+        .env("TERM", "dumb")
         .process_group(0)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -408,11 +485,43 @@ fn drain(pipe: Option<impl Read + Send + 'static>) -> Receiver<String> {
     receiver
 }
 
-/// Per server run and project: the assessment run, started exactly once. A `OnceLock` set
-/// inside the blocking task, so a request dropped while the run starts cannot release it.
+/// Per server run and project: what the located binary offers. Every request locates `codegate`
+/// afresh, as the snapshot does, so the page and the Overview card name the same binary and
+/// version, and a removed binary is not found. `--help` runs again only when the located
+/// binary's [`Identity`] changed, and an answer read while the file changed is not kept. The
+/// lock is taken inside the blocking task and held while the
+/// probe runs, so a request dropped while the probe runs cannot release it, and a second request
+/// waits for the first probe instead of starting its own.
 #[derive(Default)]
 struct Slot {
-    run: OnceLock<Arc<Assessments>>,
+    offer: Mutex<Option<Arc<Offer>>>,
+}
+
+impl Slot {
+    fn answer(&self, env: &Env) -> Result<Value, (StatusCode, String)> {
+        let mut offer = self.offer.lock().unwrap_or_else(PoisonError::into_inner);
+        let search = locate(env);
+        let Some(codegate) = search.found else {
+            *offer = None;
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                Codegate::NOT_FOUND.to_owned(),
+            ));
+        };
+        // Taken before `--help` runs, so a binary replaced while it runs is not cached under the
+        // new binary's identity.
+        let identity = Identity::of(&codegate);
+        let current = match &*offer {
+            Some(known) if known.identity == identity => Arc::clone(known),
+            _ => {
+                let (read, unchanged) = read_offer(env, &codegate, identity)?;
+                let read = Arc::new(read);
+                *offer = unchanged.then(|| Arc::clone(&read));
+                read
+            }
+        };
+        Ok(document(&codegate, &search.skipped, &current))
+    }
 }
 
 /// Slots by (run token, project root).
@@ -436,27 +545,13 @@ fn tool_error(status: StatusCode, stderr: &str) -> Response {
 
 async fn quality(State(state): State<AppState>, Extension(env): Extension<Env>) -> Response {
     let slot = slot(&state.token, env.root());
-    if let Some(run) = slot.run.get() {
-        return Json(run.document()).into_response();
-    }
-    let Some(tool_path) = env.find_tool(TOOL) else {
-        return tool_error(
-            StatusCode::SERVICE_UNAVAILABLE,
-            &format!("{TOOL} not found on PATH"),
-        );
-    };
-    let started = tokio::task::spawn_blocking(move || {
-        Arc::clone(
-            slot.run
-                .get_or_init(|| Assessments::start(env, tool_path, ASSESS_TIMEOUT)),
-        )
-    })
-    .await;
-    match started {
-        Ok(run) => Json(run.document()).into_response(),
+    let answered = tokio::task::spawn_blocking(move || slot.answer(&env)).await;
+    match answered {
+        Ok(Ok(document)) => Json(document).into_response(),
+        Ok(Err((status, stderr))) => tool_error(status, &stderr),
         Err(error) => tool_error(
             StatusCode::INTERNAL_SERVER_ERROR,
-            &format!("starting the assessments failed: {error}"),
+            &format!("probing codegate failed: {error}"),
         ),
     }
 }

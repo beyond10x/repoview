@@ -1,6 +1,6 @@
-//! Adversary cases, pass 2, for story:quality-page: `shutdown()` (and the exit hook that calls it)
-//! against an assessment run that is starting at the moment the server stops. Its own test binary,
-//! because `shutdown()` stops every assessment in the process.
+//! Adversary cases, pass 2, for story:quality-page, rewritten by story:quality-codegate:
+//! `shutdown()` (and the exit hook that calls it) against runs that are starting at the moment the
+//! server stops. Its own test binary, because `shutdown()` stops every run in the process.
 
 mod common;
 
@@ -10,15 +10,13 @@ use std::net::TcpStream;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use common::{Server, bin_dir, git, repoview};
-use repoview::api::quality::{ASSESS_TIMEOUT, Assessments, shutdown};
+use common::{Server, bin_dir, repoview};
+use repoview::api::quality::{ASSESS_TIMEOUT, BackgroundRun, shutdown};
 use repoview::server::TOKEN_HEADER;
 use repoview_sources::Env;
-use tempfile::TempDir;
-
-const CAPABILITIES: &str = r#"[{"language":"go"},{"language":"rust"},{"language":"typescript"},{"language":"java"},{"language":"markdown"}]"#;
 
 fn write_stub(dir: &Path, name: &str, body: &str) -> PathBuf {
     let path = dir.join(name);
@@ -35,28 +33,16 @@ fn write_stub(dir: &Path, name: &str, body: &str) -> PathBuf {
     panic!("stub {name} stayed busy");
 }
 
-/// A project in which all five languages are detected.
-fn five_language_project() -> TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    git(dir.path(), &["init", "--quiet"]);
-    for marker in ["go.mod", "Cargo.toml", "package.json", "pom.xml"] {
-        fs::write(dir.path().join(marker), "").unwrap();
-    }
-    fs::write(dir.path().join("README.md"), "x\n").unwrap();
-    git(dir.path(), &["add", "--", "README.md"]);
-    dir
-}
-
-/// A `codegate` whose capabilities sleep `capabilities_sleep` seconds and whose every assess
-/// appends its pid to `pids` and then runs for 30 s.
-fn codegate(bin: &Path, capabilities_sleep: &str, pids: &Path, log: &Path) -> PathBuf {
+/// A `codegate` whose `--version` sleeps `version_sleep` seconds and answers `codegate 0.3.0`,
+/// and whose every other call appends its pid to `pids` and then runs for 30 s.
+fn codegate(bin: &Path, version_sleep: &str, pids: &Path, log: &Path) -> PathBuf {
     write_stub(
         bin,
         "codegate",
         &format!(
             r#"[ "$1" = probe-busy ] && exit 0
 printf '%s\n' "$1" >> '{log}'
-if [ "$1" = capabilities ]; then sleep {capabilities_sleep}; printf '%s' '{CAPABILITIES}'; exit 0; fi
+if [ "$1" = --version ]; then sleep {version_sleep}; printf 'codegate 0.3.0\n'; exit 0; fi
 echo $$ >> '{pids}'
 exec sleep 30"#,
             log = log.display(),
@@ -85,44 +71,51 @@ fn survivors(pids: &Path) -> Vec<u32> {
     found
 }
 
-/// `Assessments::start` documents that it "returns once they are started", and `shutdown()` that
-/// it kills "every `codegate` call still running". A shutdown right after `start` returned must
-/// therefore stop the assessments `start` began. This is the order `repoview open` takes when a
-/// SIGTERM arrives during `codegate capabilities`: the graceful drain waits for that request,
-/// `start` returns, `main` returns, and the exit hook runs `shutdown()` at once.
+/// `BackgroundRun::start` documents that it returns once the run is started, and `shutdown()` that
+/// it kills every `codegate` call still running. A shutdown right after five starts returned must
+/// therefore stop every run they began, including any whose thread had not spawned yet.
 #[test]
-fn shutdown_right_after_start_stops_every_assessment_it_began() {
-    let bin = bin_dir(&["git", "sleep"]);
+fn shutdown_right_after_start_stops_every_run_it_began() {
+    let bin = bin_dir(&["sleep"]);
     let pids = bin.path().join("pids");
     let log = bin.path().join("calls.log");
     let tool = codegate(bin.path(), "0", &pids, &log);
-    let dir = five_language_project();
+    let dir = tempfile::tempdir().unwrap();
 
-    let assessments =
-        Assessments::start(Env::with_path(dir.path(), bin.path()), tool, ASSESS_TIMEOUT);
+    let runs: Vec<Arc<BackgroundRun>> = (0..5)
+        .map(|_| {
+            BackgroundRun::start(
+                Env::with_path(dir.path(), bin.path()),
+                tool.clone(),
+                vec!["assess".to_owned()],
+                ASSESS_TIMEOUT,
+            )
+        })
+        .collect();
     shutdown();
 
     std::thread::sleep(Duration::from_millis(1500));
     let left = survivors(&pids);
+    let documents: Vec<_> = runs.iter().map(|run| run.document()).collect();
     assert!(
         left.is_empty(),
-        "codegate assess still running after shutdown(): pids {left:?}; document {}",
-        assessments.document()
+        "codegate still running after shutdown(): pids {left:?}; runs {documents:?}"
     );
 }
 
 /// The same race through the served binary: SIGTERM while the first request is inside
-/// `codegate capabilities`. When repoview has exited, no `codegate assess` may be left running.
-/// Several attempts, because the window is the time the assess threads take to spawn and register.
+/// `codegate --version`. The probe goes on to `--help` during the grace period; when repoview has
+/// exited, no `codegate` may be left running. Several attempts, because the window is the time
+/// the next call takes to spawn and register.
 #[test]
-fn sigterm_while_the_run_starts_leaves_no_assessment_running() {
+fn sigterm_while_the_run_starts_leaves_no_codegate_running() {
     let mut orphaned = Vec::new();
     for attempt in 0..6 {
-        let bin = bin_dir(&["git", "sleep"]);
+        let bin = bin_dir(&["sleep"]);
         let pids = bin.path().join("pids");
         let log = bin.path().join("calls.log");
         codegate(bin.path(), "1", &pids, &log);
-        let dir = five_language_project();
+        let dir = tempfile::tempdir().unwrap();
         let mut server = Server::start_with(
             repoview()
                 .args(["open", "--no-browser", "--port", "0", "--root"])
@@ -137,10 +130,10 @@ fn sigterm_while_the_run_starts_leaves_no_assessment_running() {
         )
         .unwrap();
         let started = Instant::now();
-        while !fs::read_to_string(&log).is_ok_and(|text| text.contains("capabilities")) {
+        while !fs::read_to_string(&log).is_ok_and(|text| text.contains("--version")) {
             assert!(
                 started.elapsed() < Duration::from_secs(10),
-                "attempt {attempt}: codegate capabilities never ran"
+                "attempt {attempt}: codegate --version never ran"
             );
             std::thread::sleep(Duration::from_millis(20));
         }
@@ -166,6 +159,6 @@ fn sigterm_while_the_run_starts_leaves_no_assessment_running() {
     }
     assert!(
         orphaned.is_empty(),
-        "codegate assess left running after repoview exited (attempt, pids): {orphaned:?}"
+        "codegate left running after repoview exited (attempt, pids): {orphaned:?}"
     );
 }
