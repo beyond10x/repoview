@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub use process::{DIAGNOSTIC_LIMIT, Outcome, TIMEOUT, find_tool, run, truncate_diagnostic};
+pub use quality::{Codegate, CodegateSearch};
 pub use spec::detected_roots;
 
 /// `repoview.project.SourceKind`.

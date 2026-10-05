@@ -350,7 +350,8 @@ fn quality_absent_without_codegate_not_tool_missing() {
 fn quality_present_with_codegate_on_path() {
     let project = tempfile::tempdir().unwrap();
     let path = tempfile::tempdir().unwrap();
-    let codegate = stub(path.path(), "codegate", "exit 1");
+    // story:quality-codegate: only a codegate whose --version prints `codegate <semver>` counts.
+    let codegate = stub(path.path(), "codegate", "printf 'codegate 0.3.0\\n'");
     let sections = read_all(&Env::with_path(project.path(), path.path()));
     let quality = section(&sections, "quality");
     assert_eq!(quality.availability, Availability::Present);
@@ -358,6 +359,7 @@ fn quality_present_with_codegate_on_path() {
         quality.tool_path.as_deref(),
         Some(codegate.to_str().unwrap())
     );
+    assert_eq!(quality.tool_version.as_deref(), Some("0.3.0"));
 }
 
 #[test]
