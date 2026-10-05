@@ -31,3 +31,10 @@ The public docs site (`docs` skill) follows once `story:static-export` merges.
 | story:shared-tool-runner | `impl/shared-tool-runner` | `~/.local/state/worktree/trees/b10x/repoview/impl-shared-tool-runner` | `~/.cache/b10x-target/repoview-shared-tool-runner` | `~/.cache/repoview-wave-three/shared-tool-runner/scratch` | dispatched |
 | story:taskfile-tasks | `impl/taskfile-tasks` | `~/.local/state/worktree/trees/b10x/repoview/impl-taskfile-tasks` | `~/.cache/b10x-target/repoview-taskfile-tasks` | `~/.cache/repoview-wave-three/taskfile-tasks/scratch` | dispatched |
 | integration | `wave/three` | `~/.local/state/worktree/trees/b10x/repoview/wave-three` | `~/.cache/b10x-target/repoview` | `~/.cache/repoview-wave-three/coordinator` | opening commit |
+
+## State at the usage limit (2026-10-05)
+
+- Merged into wave/three: story:shared-tool-runner, story:ci-binaries, story:static-export; coordinator commits: ess/22, web/dist digest embed fix.
+- story:taskfile-tasks: committed on impl/taskfile-tasks after correction round 1 (Rust 219, web 542); adversary pass 2 not yet run; not merged.
+- Wave four drafted outside the store: ~/.cache/repoview-wave-four/coordinator/story-docs-site.md.
+- Next: taskfile pass 2, merge, full gate, close wave three, push; then docs site (wave four) and Stage C/D.
