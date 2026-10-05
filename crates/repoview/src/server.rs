@@ -41,10 +41,12 @@ pub async fn bind(port: u16) -> std::io::Result<TcpListener> {
     TcpListener::bind((Ipv4Addr::LOCALHOST, port)).await
 }
 
-/// The application router.
+/// The application router: `/api/snapshot`, every API module's routes (`api::routes`), then the
+/// fallback, all behind the guard.
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/snapshot", get(snapshot))
+        .merge(crate::api::routes())
         .fallback(fallback)
         .layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
