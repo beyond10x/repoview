@@ -146,6 +146,8 @@ async fn serve(root: PathBuf, port: u16, browser: bool) -> Result<(), String> {
         .port();
     let token = new_token();
     let project = root.clone();
+    // The API page modules read the project through this request extension.
+    let env = Env::new(root.clone());
     let state = AppState {
         token: token.clone(),
         port,
@@ -177,7 +179,7 @@ async fn serve(root: PathBuf, port: u16, browser: bool) -> Result<(), String> {
         }
         std::process::exit(0);
     });
-    axum::serve(listener, router(state))
+    axum::serve(listener, router(state).layer(axum::Extension(env)))
         .with_graceful_shutdown(async move {
             let _ = stopped.await;
         })
