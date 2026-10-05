@@ -3,6 +3,7 @@
 pub mod api;
 pub mod assets;
 pub mod browser;
+pub mod export;
 pub mod project;
 pub mod server;
 

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use repoview::assets::EmbeddedAssets;
 use repoview::browser::{RedirectPage, opener};
+use repoview::export;
 use repoview::project::{discover, snapshot};
 use repoview::server::{AppState, bind, new_token, router};
 use repoview_sources::{Availability, Env, Section, all};
@@ -30,6 +31,21 @@ enum Command {
     Snapshot(SnapshotArgs),
     /// List each source: detected or not, tool path and version, or why not.
     Doctor(RootArg),
+    /// Write a static copy of every page: the web app in static mode and one JSON file per API
+    /// answer, for any static file server. No token, no server.
+    Export(ExportArgs),
+}
+
+#[derive(Args)]
+struct ExportArgs {
+    /// The directory to write; it must be absent or empty.
+    #[arg(long, value_name = "DIR")]
+    out: PathBuf,
+    /// Replace a previous export in --out: remove only the files its data/export.json lists.
+    #[arg(long)]
+    force: bool,
+    #[command(flatten)]
+    root: RootArg,
 }
 
 #[derive(Args)]
@@ -68,17 +84,59 @@ enum Format {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let result = match cli.command.unwrap_or(Command::Open(cli.open)) {
-        Command::Open(args) => open(args),
-        Command::Snapshot(args) => print_snapshot(args),
-        Command::Doctor(args) => doctor(args),
+        Command::Open(args) => open(args).map_err(Failure::Error),
+        Command::Snapshot(args) => print_snapshot(args).map_err(Failure::Error),
+        Command::Doctor(args) => doctor(args).map_err(Failure::Error),
+        Command::Export(args) => export(args),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
-        Err(message) => {
+        Err(Failure::Refused(message)) => {
+            eprintln!("repoview: {message}");
+            ExitCode::from(2)
+        }
+        Err(Failure::Error(message)) => {
             eprintln!("repoview: {message}");
             ExitCode::FAILURE
         }
     }
+}
+
+/// Why a command failed: `Refused` exits 2, `Error` exits 1.
+enum Failure {
+    Refused(String),
+    Error(String),
+}
+
+fn export(args: ExportArgs) -> Result<(), Failure> {
+    let root = project_root(&args.root).map_err(Failure::Error)?;
+    let options = export::Options {
+        out: args.out.clone(),
+        force: args.force,
+        token: new_token(),
+        home: std::env::var_os("HOME").map(PathBuf::from),
+    };
+    let summary =
+        export::export(&Env::new(root), &export::Site::embedded(), &options).map_err(|error| {
+            match error {
+                export::Error::Refused(message) => Failure::Refused(message),
+                export::Error::Failed(message) => Failure::Error(message),
+            }
+        })?;
+    for item in &summary.skipped {
+        eprintln!("repoview: skipped {item}: the pages cannot request it");
+    }
+    let errors = summary
+        .routes
+        .iter()
+        .filter(|(_, status)| !(200..300).contains(status))
+        .count();
+    println!(
+        "exported {} routes ({errors} answered non-2xx) to {}",
+        summary.routes.len(),
+        args.out.display()
+    );
+    Ok(())
 }
 
 fn project_root(arg: &RootArg) -> Result<PathBuf, String> {
