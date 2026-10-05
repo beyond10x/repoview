@@ -81,6 +81,24 @@ describe('apiGet in server mode', () => {
     }
   })
 
+  it('a non-2xx with a JSON body carries that body', async () => {
+    const body = { tool: 'aep', exit: 1, stderr: 'error: no such artifact\n' }
+    stubFetch(() => json(body, 502))
+    expect(await apiGet('plan/artifacts/story:x')).toEqual({
+      state: 'error',
+      status: 502,
+      message: 'HTTP 502',
+      body,
+    })
+  })
+
+  it('a non-2xx without a JSON body carries no body', async () => {
+    stubFetch(() => new Response('no', { status: 502 }))
+    const result = await apiGet('plan/board')
+    expect(result).toEqual({ state: 'error', status: 502, message: 'HTTP 502' })
+    expect('body' in result).toBe(false)
+  })
+
   it('a network failure is error without a status, carrying the reason', async () => {
     vi.stubGlobal(
       'fetch',

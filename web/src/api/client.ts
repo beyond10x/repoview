@@ -3,10 +3,11 @@
 
 export type Mode = 'server' | 'static'
 
+// An error's `body` is the response's JSON when it had one, e.g. a tool's stderr behind a 502.
 export type ApiResult<T> =
   | { state: 'ready'; data: T }
   | { state: 'token-rejected' }
-  | { state: 'error'; status: number | null; message: string }
+  | { state: 'error'; status: number | null; message: string; body?: unknown }
 
 export const TOKEN_STORAGE_KEY = 'repoview.token'
 export const TOKEN_HEADER = 'X-Repoview-Token'
@@ -84,6 +85,15 @@ function encodePath(path: string): string | null {
   return segments.map(encodeURIComponent).join('/')
 }
 
+/** The response body parsed as JSON, or `undefined` when it is not JSON. */
+async function jsonOrNothing(response: Response): Promise<unknown> {
+  try {
+    return (await response.json()) as unknown
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * GET one API document, e.g. `apiGet('plan/board')`. Always settles to a result; never rejects.
  * Only a 403 from the server is `token-rejected`; in static mode there is no token to reject.
@@ -102,7 +112,10 @@ export async function apiGet<T>(path: string): Promise<ApiResult<T>> {
     const response = await fetch(url, { headers })
     if (response.status === 403 && !isStatic) return { state: 'token-rejected' }
     if (!response.ok) {
-      return { state: 'error', status: response.status, message: `HTTP ${String(response.status)}` }
+      const message = `HTTP ${String(response.status)}`
+      const body = await jsonOrNothing(response)
+      if (body === undefined) return { state: 'error', status: response.status, message }
+      return { state: 'error', status: response.status, message, body }
     }
     return { state: 'ready', data: (await response.json()) as T }
   } catch (error) {
