@@ -1,0 +1,24 @@
+{
+  "id": "migration-plan:foundation-source-pins-20260909",
+  "kind": "migration-plan",
+  "status": "draft",
+  "title": "Compose verified foundation source revisions",
+  "path": "migration-plan/foundation-source-pins-20260909.md",
+  "relations": [
+    {
+      "relation": "informed_by",
+      "target": "story:one-entity-runtime-pin"
+    },
+    {
+      "relation": "serves",
+      "target": "vision:O2"
+    }
+  ],
+  "refs": [],
+  "blocked_by": [
+    {
+      "blocker": "dependency-blocker:metaharness-source-receipt",
+      "type": "dependency"
+    }
+  ]
+}

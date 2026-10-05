@@ -1,0 +1,592 @@
+[
+  {
+    "id": "architecture-design:repoview",
+    "kind": "architecture-design",
+    "status": "draft",
+    "title": "repoview: one Rust binary, embedded Vue SPA, reading through the owning CLIs",
+    "path": "architecture-design/repoview.md",
+    "relations": [
+      {
+        "relation": "designs",
+        "target": "vision:repoview"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "epic:plan",
+    "kind": "epic",
+    "status": "draft",
+    "title": "AEP plan as board, tree and artifact pages",
+    "path": "epic/plan.md",
+    "relations": [
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      },
+      {
+        "relation": "implements",
+        "target": "architecture-design:repoview"
+      },
+      {
+        "relation": "depends_on",
+        "target": "epic:shell"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "epic:quality",
+    "kind": "epic",
+    "status": "draft",
+    "title": "Codegate rating per language",
+    "path": "epic/quality.md",
+    "relations": [
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      },
+      {
+        "relation": "implements",
+        "target": "architecture-design:repoview"
+      },
+      {
+        "relation": "depends_on",
+        "target": "epic:shell"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "epic:release",
+    "kind": "epic",
+    "status": "draft",
+    "title": "Downloadable binaries from GitHub Actions",
+    "path": "epic/release.md",
+    "relations": [
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      },
+      {
+        "relation": "implements",
+        "target": "architecture-design:repoview"
+      },
+      {
+        "relation": "depends_on",
+        "target": "epic:shell"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "epic:repository",
+    "kind": "epic",
+    "status": "draft",
+    "title": "Git state and top-level documents",
+    "path": "epic/repository.md",
+    "relations": [
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      },
+      {
+        "relation": "implements",
+        "target": "architecture-design:repoview"
+      },
+      {
+        "relation": "depends_on",
+        "target": "epic:shell"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "epic:shell",
+    "kind": "epic",
+    "status": "draft",
+    "title": "CLI, local server and Overview page",
+    "path": "epic/shell.md",
+    "relations": [
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      },
+      {
+        "relation": "implements",
+        "target": "architecture-design:repoview"
+      },
+      {
+        "relation": "informed_by",
+        "target": "executable-system-specification:read-model"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "epic:spec",
+    "kind": "epic",
+    "status": "draft",
+    "title": "ESS specifications browsable per root",
+    "path": "epic/spec.md",
+    "relations": [
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      },
+      {
+        "relation": "implements",
+        "target": "architecture-design:repoview"
+      },
+      {
+        "relation": "depends_on",
+        "target": "epic:shell"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "epic:static-export",
+    "kind": "epic",
+    "status": "draft",
+    "title": "Static export and public docs with repoview's own view",
+    "path": "epic/static-export.md",
+    "relations": [
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      },
+      {
+        "relation": "implements",
+        "target": "architecture-design:repoview"
+      },
+      {
+        "relation": "depends_on",
+        "target": "epic:shell"
+      },
+      {
+        "relation": "depends_on",
+        "target": "epic:plan"
+      },
+      {
+        "relation": "depends_on",
+        "target": "epic:spec"
+      },
+      {
+        "relation": "depends_on",
+        "target": "epic:repository"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "executable-system-specification:read-model",
+    "kind": "executable-system-specification",
+    "status": "draft",
+    "title": "repoview read model: Project and its Sources",
+    "path": "executable-system-specification/read-model.md",
+    "relations": [
+      {
+        "relation": "derived_from",
+        "target": "architecture-design:repoview"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "review-result:adversary-server-skeleton-pass-1",
+    "kind": "review-result",
+    "status": "active",
+    "title": "adversary, pass 1, story:server-skeleton",
+    "path": "review-result/adversary-server-skeleton-pass-1.md",
+    "relations": [
+      {
+        "relation": "reviews",
+        "target": "story:server-skeleton"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "review-result:adversary-server-skeleton-pass-2",
+    "kind": "review-result",
+    "status": "active",
+    "title": "adversary, pass 2, story:server-skeleton",
+    "path": "review-result/adversary-server-skeleton-pass-2.md",
+    "relations": [
+      {
+        "relation": "reviews",
+        "target": "story:server-skeleton"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "review-result:adversary-web-skeleton-pass-1",
+    "kind": "review-result",
+    "status": "active",
+    "title": "adversary, pass 1, story:web-skeleton",
+    "path": "review-result/adversary-web-skeleton-pass-1.md",
+    "relations": [
+      {
+        "relation": "reviews",
+        "target": "story:web-skeleton"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "review-result:adversary-web-skeleton-pass-2",
+    "kind": "review-result",
+    "status": "active",
+    "title": "adversary, pass 2, story:web-skeleton",
+    "path": "review-result/adversary-web-skeleton-pass-2.md",
+    "relations": [
+      {
+        "relation": "reviews",
+        "target": "story:web-skeleton"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "review-result:shell-acceptance-round-1",
+    "kind": "review-result",
+    "status": "active",
+    "title": "plan-critic-acceptance, round 1, epic:shell stories",
+    "path": "review-result/shell-acceptance-round-1.md",
+    "relations": [
+      {
+        "relation": "reviews",
+        "target": "story:server-skeleton"
+      },
+      {
+        "relation": "reviews",
+        "target": "story:web-skeleton"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "review-result:shell-acceptance-round-2",
+    "kind": "review-result",
+    "status": "active",
+    "title": "plan-critic-acceptance, round 2, epic:shell stories",
+    "path": "review-result/shell-acceptance-round-2.md",
+    "relations": [
+      {
+        "relation": "reviews",
+        "target": "story:server-skeleton"
+      },
+      {
+        "relation": "reviews",
+        "target": "story:web-skeleton"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "review-result:shell-design-round-1",
+    "kind": "review-result",
+    "status": "active",
+    "title": "plan-critic-design, round 1, epic:shell stories",
+    "path": "review-result/shell-design-round-1.md",
+    "relations": [
+      {
+        "relation": "reviews",
+        "target": "story:server-skeleton"
+      },
+      {
+        "relation": "reviews",
+        "target": "story:web-skeleton"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "review-result:shell-design-round-2",
+    "kind": "review-result",
+    "status": "active",
+    "title": "plan-critic-design, round 2, epic:shell stories",
+    "path": "review-result/shell-design-round-2.md",
+    "relations": [
+      {
+        "relation": "reviews",
+        "target": "story:server-skeleton"
+      },
+      {
+        "relation": "reviews",
+        "target": "story:web-skeleton"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "review-result:shell-parallel-safety-round-1",
+    "kind": "review-result",
+    "status": "active",
+    "title": "plan-critic-parallel-safety, round 1, epic:shell stories",
+    "path": "review-result/shell-parallel-safety-round-1.md",
+    "relations": [
+      {
+        "relation": "reviews",
+        "target": "story:server-skeleton"
+      },
+      {
+        "relation": "reviews",
+        "target": "story:web-skeleton"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "review-result:shell-parallel-safety-round-2",
+    "kind": "review-result",
+    "status": "active",
+    "title": "plan-critic-parallel-safety, round 2, epic:shell stories",
+    "path": "review-result/shell-parallel-safety-round-2.md",
+    "relations": [
+      {
+        "relation": "reviews",
+        "target": "story:server-skeleton"
+      },
+      {
+        "relation": "reviews",
+        "target": "story:web-skeleton"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "review-result:shell-scope-round-1",
+    "kind": "review-result",
+    "status": "active",
+    "title": "plan-critic-scope, round 1, epic:shell stories",
+    "path": "review-result/shell-scope-round-1.md",
+    "relations": [
+      {
+        "relation": "reviews",
+        "target": "story:server-skeleton"
+      },
+      {
+        "relation": "reviews",
+        "target": "story:web-skeleton"
+      },
+      {
+        "relation": "reviews",
+        "target": "epic:shell"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "review-result:shell-scope-round-2",
+    "kind": "review-result",
+    "status": "active",
+    "title": "plan-critic-scope, round 2, epic:shell stories",
+    "path": "review-result/shell-scope-round-2.md",
+    "relations": [
+      {
+        "relation": "reviews",
+        "target": "story:server-skeleton"
+      },
+      {
+        "relation": "reviews",
+        "target": "story:web-skeleton"
+      },
+      {
+        "relation": "reviews",
+        "target": "epic:shell"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "story:page-frame",
+    "kind": "story",
+    "status": "active",
+    "title": "Shared page frame: API module registry, client, routes, nav, markdown and Mermaid components",
+    "path": "story/page-frame.md",
+    "relations": [
+      {
+        "relation": "decomposes",
+        "target": "epic:shell"
+      },
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      },
+      {
+        "relation": "depends_on",
+        "target": "story:server-skeleton"
+      },
+      {
+        "relation": "depends_on",
+        "target": "story:web-skeleton"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "story:plan-pages",
+    "kind": "story",
+    "status": "draft",
+    "title": "Plan board, tree and artifact pages",
+    "path": "story/plan-pages.md",
+    "relations": [
+      {
+        "relation": "decomposes",
+        "target": "epic:plan"
+      },
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      },
+      {
+        "relation": "depends_on",
+        "target": "story:page-frame"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "story:quality-page",
+    "kind": "story",
+    "status": "draft",
+    "title": "Codegate rating per language",
+    "path": "story/quality-page.md",
+    "relations": [
+      {
+        "relation": "decomposes",
+        "target": "epic:quality"
+      },
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      },
+      {
+        "relation": "depends_on",
+        "target": "story:page-frame"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "story:repository-page",
+    "kind": "story",
+    "status": "draft",
+    "title": "Git state, documents and tasks",
+    "path": "story/repository-page.md",
+    "relations": [
+      {
+        "relation": "decomposes",
+        "target": "epic:repository"
+      },
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      },
+      {
+        "relation": "depends_on",
+        "target": "story:page-frame"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "story:server-skeleton",
+    "kind": "story",
+    "status": "implemented",
+    "title": "Rust binary: CLI, token-guarded local server, snapshot of detected sources, embedded SPA",
+    "path": "story/server-skeleton.md",
+    "relations": [
+      {
+        "relation": "decomposes",
+        "target": "epic:shell"
+      },
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "story:spec-pages",
+    "kind": "story",
+    "status": "draft",
+    "title": "ESS roots, entities with lifecycle diagrams, interaction graph",
+    "path": "story/spec-pages.md",
+    "relations": [
+      {
+        "relation": "decomposes",
+        "target": "epic:spec"
+      },
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      },
+      {
+        "relation": "depends_on",
+        "target": "story:page-frame"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "story:web-skeleton",
+    "kind": "story",
+    "status": "implemented",
+    "title": "Vue app: Overview page over the snapshot",
+    "path": "story/web-skeleton.md",
+    "relations": [
+      {
+        "relation": "decomposes",
+        "target": "epic:shell"
+      },
+      {
+        "relation": "serves",
+        "target": "vision:repoview"
+      }
+    ],
+    "refs": [],
+    "blocked_by": []
+  },
+  {
+    "id": "vision:repoview",
+    "kind": "vision",
+    "status": "draft",
+    "title": "One view of a project, from the project's own records",
+    "path": "vision/repoview.md",
+    "relations": [],
+    "refs": [],
+    "blocked_by": []
+  }
+]

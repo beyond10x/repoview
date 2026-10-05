@@ -1,0 +1,43 @@
+{
+  "artifact": "story:page-frame",
+  "store": "/work/example/.engineering/planning",
+  "status": "active",
+  "revision": 16,
+  "blocked_by": [],
+  "reached": [
+    {
+      "from": "draft",
+      "to": "proposed",
+      "at": "2026-10-05T13:28:40Z",
+      "revision": 15,
+      "rested_on": [],
+      "on_nothing_recorded": "no record: nothing was recorded about how this was decided"
+    },
+    {
+      "from": "proposed",
+      "to": "active",
+      "at": "2026-10-05T13:28:40Z",
+      "revision": 16,
+      "rested_on": [],
+      "on_nothing_recorded": "no record: nothing was recorded about how this was decided"
+    }
+  ],
+  "recorded_since": [],
+  "next": [
+    {
+      "status": "implemented",
+      "needs": [
+        {
+          "kind": "test_result",
+          "at_least": 1,
+          "held": 0
+        }
+      ]
+    },
+    {
+      "status": "archived",
+      "needs": []
+    }
+  ],
+  "unreadable": 0
+}

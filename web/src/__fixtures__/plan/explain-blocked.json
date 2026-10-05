@@ -1,0 +1,24 @@
+{
+  "artifact": "migration-plan:foundation-source-pins-20260909",
+  "store": "/work/example/.engineering/planning",
+  "status": "draft",
+  "revision": 2,
+  "blocked_by": [
+    {
+      "blocker": "dependency-blocker:metaharness-source-receipt",
+      "type": "dependency"
+    }
+  ],
+  "reached": [],
+  "recorded_since": [
+    {
+      "kind": "test_result",
+      "source": "task check: all 16 declared steps passed, including configured PostgreSQL, Rust 1.85 and website build; exact source composition",
+      "reference": "foundation-1788942852-970971",
+      "at": "2026-09-09T11:10:23Z",
+      "revision": 2
+    }
+  ],
+  "next": [],
+  "unreadable": 0
+}

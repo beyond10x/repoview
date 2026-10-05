@@ -1,0 +1,50 @@
+{
+  "artifact": "epic:offline-dependency-evaluation",
+  "store": "/work/example/.engineering/planning",
+  "status": "implemented",
+  "revision": 4,
+  "blocked_by": [],
+  "reached": [
+    {
+      "from": "draft",
+      "to": "proposed",
+      "at": "2026-10-02T11:55:38Z",
+      "revision": 2,
+      "rested_on": [],
+      "on_nothing_recorded": "no record: nothing was recorded about how this was decided"
+    },
+    {
+      "from": "proposed",
+      "to": "active",
+      "at": "2026-10-02T11:55:38Z",
+      "revision": 3,
+      "rested_on": [],
+      "on_nothing_recorded": "no record: nothing was recorded about how this was decided"
+    },
+    {
+      "from": "active",
+      "to": "implemented",
+      "at": "2026-10-02T12:55:18Z",
+      "revision": 4,
+      "rested_on": [
+        {
+          "kind": "test_result",
+          "source": "Single child story implemented after integration task check exit0",
+          "reference": "verification-report:codegate-wave1",
+          "at": "2026-10-02T12:55:17Z",
+          "revision": 3
+        }
+      ],
+      "executor": "agent:codegate-wave001",
+      "correlation": "codegate-wave001"
+    }
+  ],
+  "recorded_since": [],
+  "next": [
+    {
+      "status": "archived",
+      "needs": []
+    }
+  ],
+  "unreadable": 0
+}

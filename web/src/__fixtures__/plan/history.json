@@ -1,0 +1,28 @@
+[
+  {
+    "at": "2026-10-05T13:28:40Z",
+    "actor": "human:timo",
+    "artifact": "story:page-frame",
+    "kind": "story",
+    "revision": 15,
+    "change": {
+      "change": "moved",
+      "from": "draft",
+      "to": "proposed",
+      "decided_on": {}
+    }
+  },
+  {
+    "at": "2026-10-05T13:28:40Z",
+    "actor": "human:timo",
+    "artifact": "story:page-frame",
+    "kind": "story",
+    "revision": 16,
+    "change": {
+      "change": "moved",
+      "from": "proposed",
+      "to": "active",
+      "decided_on": {}
+    }
+  }
+]

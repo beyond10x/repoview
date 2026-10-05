@@ -1,0 +1,60 @@
+[
+  {
+    "at": "2026-10-02T11:55:38Z",
+    "actor": "human:timo",
+    "artifact": "epic:offline-dependency-evaluation",
+    "kind": "epic",
+    "revision": 2,
+    "change": {
+      "change": "moved",
+      "from": "draft",
+      "to": "proposed",
+      "decided_on": {}
+    }
+  },
+  {
+    "at": "2026-10-02T11:55:38Z",
+    "actor": "human:timo",
+    "artifact": "epic:offline-dependency-evaluation",
+    "kind": "epic",
+    "revision": 3,
+    "change": {
+      "change": "moved",
+      "from": "proposed",
+      "to": "active",
+      "decided_on": {}
+    }
+  },
+  {
+    "at": "2026-10-02T12:55:17Z",
+    "actor": "human:timo",
+    "artifact": "epic:offline-dependency-evaluation",
+    "kind": "epic",
+    "revision": 3,
+    "change": {
+      "change": "evidence",
+      "kind": "test_result",
+      "source": "Single child story implemented after integration task check exit0",
+      "reference": "verification-report:codegate-wave1"
+    }
+  },
+  {
+    "at": "2026-10-02T12:55:18Z",
+    "actor": "human:timo",
+    "artifact": "epic:offline-dependency-evaluation",
+    "kind": "epic",
+    "revision": 4,
+    "change": {
+      "change": "moved",
+      "from": "active",
+      "to": "implemented",
+      "decided_on": {
+        "recorded": {
+          "test_result": 1
+        }
+      },
+      "executor": "agent:codegate-wave001",
+      "correlation": "codegate-wave001"
+    }
+  }
+]
