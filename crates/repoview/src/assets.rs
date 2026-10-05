@@ -40,6 +40,11 @@ impl AssetSource for MemoryAssets {
 #[allow_missing = true]
 struct Dist;
 
+/// Digest of `web/dist` at compile time (`build.rs`); reading it here makes the compiler
+/// invocation depend on the web build, so neither cargo nor a compiler cache reuses a crate
+/// compiled against an older or absent web app.
+pub const WEB_DIST_DIGEST: &str = env!("REPOVIEW_WEB_DIST_DIGEST");
+
 /// The built web app.
 pub struct EmbeddedAssets;
 
