@@ -18,10 +18,11 @@ SPA embedded in the binary. Humans start at [`README.md`](README.md).
 |---|---|
 | `.engineering/planning/` | the AEP store: `vision:repoview`, `architecture-design:repoview`, the epics |
 | `ess/` | the read model specification (`format: ess/22`); `ess specify validate --path ess` |
-| `crates/repoview/` | the binary: clap derive CLI, axum server, embedded SPA (planned) |
-| `crates/repoview-sources/` | one module per source: vcs, plan, spec, quality, docs (planned) |
-| `generated/` | Rust wire types generated from `ess/`; never hand-edited (planned) |
-| `web/` | Vue 3 + Vite + TypeScript SPA (planned) |
+| `crates/repoview/` | the binary: clap derive CLI (`open`, `snapshot`, `doctor`, `export`), axum server, `api/` modules per page, embedded SPA (`build.rs` hashes `web/dist`) |
+| `crates/repoview-sources/` | one module per source (vcs, plan, spec, quality, docs) and the one subprocess runner (`run_output`) |
+| `web/` | Vue 3 + Vite + TypeScript SPA |
+| `.github/workflows/` | `ci.yml` (gate; Linux build per `main` push), `release-build.yml` (tags: three targets, `SHA256SUMS`), `shared-gates.yml` |
+| `.engineering/waves/` | one page per wave: units, gate, decisions |
 
 ## Rules
 
@@ -55,15 +56,23 @@ SPA embedded in the binary. Humans start at [`README.md`](README.md).
 task check
 ```
 
-Planned contents: `aep plan artifact validate`, `ess specify validate --path ess`, generated drift,
-`cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, and in `web/` typecheck, lint,
-`vitest` and `vite build`.
+Steps (`Taskfile.yml`): `aep plan artifact validate`, `ess specify validate --path ess`,
+`cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`,
+`cargo test --workspace --locked`, `pnpm --dir web install --frozen-lockfile`, `pnpm --dir web check`
+(format, lint, typecheck, vitest, build). `task build` builds the web app, then the release binary
+with it embedded. Wire types generated from `ess/` are not built yet (the views marker in
+`ess/domains/project.yaml` is open).
 
 ## Publishing
 
 Commits and pushes are `b10x-bot[bot]` through `b10x-gates bot`; every GitHub write goes through
-`b10x-gates api` (workspace `AGENTS.md`, "GitHub writes are the bot's"). A release is an annotated
-tag `0.x.y` on `main`; `release-build.yml` builds the archives and `SHA256SUMS` as workflow
-artifacts with read-only permissions. Download that tag run's artifacts, verify the checksums,
-then publish the GitHub Release and its assets as the bot. Report released only after the release
-and its assets are verified.
+`b10x-gates api` (workspace `AGENTS.md`, "GitHub writes are the bot's"). A release:
+
+1. Bump `version` in `Cargo.toml` (workspace) and `web/package.json`; `task check` green on that commit.
+2. Annotated tag `0.x.y` on `main`, pushed as the bot.
+3. `release-build.yml` runs on the tag (contents: read): three targets, each smoke-tested, then the
+   artifact `repoview-<tag>-release` with the three archives and `SHA256SUMS`.
+4. Download that artifact (`gh run download <run> -n repoview-<tag>-release`, read-only), run
+   `sha256sum -c SHA256SUMS`.
+5. Create the GitHub Release and upload the four files through `b10x-gates api` as `b10x-bot[bot]`.
+6. Report released only after the release, its assets and their checksums are verified.

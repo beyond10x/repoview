@@ -2,15 +2,17 @@
 
 Run `repoview` in a project directory and a browser tab opens on that project: its Git state, its
 ESS specifications, its AEP plan as a board and a tree of visions, designs, epics and stories, and
-its Codegate quality rating. One command, no configuration, read-only.
+what the beyond10x [Codegate](https://github.com/beyond10x/codegate) reports about it. One command, no
+configuration, read-only.
 
 repoview does not interpret those records itself. It asks the tools that own them (`git`, `aep`,
 `ess`, `codegate`) for their JSON output and shows on every panel which tool and version answered.
 A source that is absent, or whose tool is missing or fails, says so; it never shows as empty.
 
-> Status: design. Nothing is implemented yet. The design is
-> [`.engineering/planning/architecture-design/repoview.md`](.engineering/planning/architecture-design/repoview.md),
-> the vision is [`.engineering/planning/vision/repoview.md`](.engineering/planning/vision/repoview.md).
+> Status: early. Overview, Plan (board, tree, artifact), Specs, Quality and Repository pages, and
+> `repoview export`, work today; there is no tagged release yet. Codegate 0.3.0 has no source
+> assessment, so the Quality page names the binary and says so. The design is
+> [`.engineering/planning/architecture-design/repoview.md`](.engineering/planning/architecture-design/repoview.md).
 
 ## Use
 
@@ -20,6 +22,7 @@ repoview                       # opens the browser
 repoview open --no-browser     # prints the URL instead
 repoview snapshot --format json
 repoview doctor                # which sources were found, which tools answered
+repoview export --out site/     # a static copy of every page, for any static file server
 ```
 
 The server listens on `127.0.0.1` only. The URL it prints carries a token for that run.
