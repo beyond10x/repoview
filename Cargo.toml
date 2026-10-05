@@ -1,0 +1,25 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+repository = "https://github.com/beyond10x/repoview"
+publish = false
+
+[workspace.dependencies]
+repoview-sources = { path = "crates/repoview-sources" }
+axum = "0.8.9"
+clap = { version = "4.6.7", features = ["derive"] }
+getrandom = "0.4.3"
+libc = "0.2.190"
+rust-embed = "8.12.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+subtle = "2.6.1"
+tempfile = "3.27.0"
+tokio = { version = "1.53.2", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tower = { version = "0.5.3", features = ["util"] }
+wait-timeout = "0.2.1"
