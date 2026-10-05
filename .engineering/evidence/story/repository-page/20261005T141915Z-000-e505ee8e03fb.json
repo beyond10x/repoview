@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-05T14:19:15Z",
+  "actor": "human:timo",
+  "artifact": "story:repository-page",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:adversary-repository-page-pass-2",
+    "review": "review-result:adversary-repository-page-pass-2",
+    "outcome": "no-op"
+  }
+}

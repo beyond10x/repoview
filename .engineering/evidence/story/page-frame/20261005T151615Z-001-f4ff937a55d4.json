@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T15:16:15Z",
+  "actor": "human:timo",
+  "artifact": "story:page-frame",
+  "kind": "story",
+  "revision": 16,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "VERIFIED: four page modules registered behind the guard; the four page stories built on it"
+  }
+}

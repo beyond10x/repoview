@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T14:24:38Z",
+  "actor": "human:timo",
+  "artifact": "story:repository-page",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "coordinator re-run on impl/repository-page: cargo test 112 passed, 1 failed (api_repository_served, needs wave/two main.rs); pnpm check 154 passed"
+  }
+}

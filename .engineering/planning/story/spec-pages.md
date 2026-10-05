@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:spec-pages
 kind: story
-status: draft
+status: implemented
 title: ESS roots, entities with lifecycle diagrams, interaction graph
 summary: ess validate, compile and graph behind /api/spec/*; per-root page with entities, lifecycles and the graph in Mermaid.
 relations:
@@ -10,6 +10,8 @@ relations:
 - serves: vision:repoview
 - depends_on: story:page-frame
 scope:
+- confidence: cited
+  path: crates/repoview-sources/src/lib.rs
 - confidence: cited
   path: crates/repoview-sources/src/spec.rs
 - confidence: cited
@@ -24,7 +26,11 @@ scope:
   path: web/src/pages/SpecRootPage.vue
 - confidence: cited
   path: web/src/pages/SpecsPage.vue
-revision: 8
+revision: 12
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-05T13:40:01Z", actor: "human:timo", revision: 9}
+- {from: "proposed", to: "active", at: "2026-10-05T13:40:01Z", actor: "human:timo", revision: 10}
+- {from: "active", to: "implemented", at: "2026-10-05T15:16:16Z", actor: "human:timo", revision: 12, decided_on: {"recorded":{"test_result":1,"review_outcome":2,"verification":1}}}
 ---
 ## Story
 

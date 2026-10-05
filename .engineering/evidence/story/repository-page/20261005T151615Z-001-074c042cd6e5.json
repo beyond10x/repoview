@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T15:16:15Z",
+  "actor": "human:timo",
+  "artifact": "story:repository-page",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "VERIFIED: /api/vcs and /api/docs/README.md 200 on the merged release binary; api_repository_served 1 passed on wave/two"
+  }
+}

@@ -7,7 +7,7 @@ title: 'repoview: one Rust binary, embedded Vue SPA, reading through the owning 
 summary: Local 127.0.0.1 server with a run token; every fact read from git, aep, ess and codegate JSON output with its producer recorded.
 relations:
 - designs: vision:repoview
-revision: 3
+revision: 4
 ---
 ## Decision
 
@@ -179,11 +179,15 @@ permissions. The GitHub Release and its assets are published by `b10x-bot[bot]` 
 
 ## Codegate
 
-repoview reads an assessment document with a `rating`, not a particular binary. Today only
-`fluxplane/codegate assess` produces one, for Go and Markdown. When `beyond10x/codegate` ships its
-scoring (its own vision), its format becomes the one repoview targets and the Go adapter is removed.
-A language with no assessment shows "not assessed: <tool> does not support <language>", never a
-score.
+repoview reads the beyond10x Codegate (`github.com/beyond10x/codegate`, Rust) and nothing else (operator,
+2026-10-05). It locates that binary by scanning `PATH` for a `codegate` whose `--version` prints
+`codegate <semver>`; the older Go `codegate` (`fluxplane/codegate`) fails `--version` and is listed
+as skipped, never run for an assessment. Codegate 0.3.0 offers `evaluate` on supplied dependency
+facts only, so the Quality page names the binary, lists its commands and states that there is no
+source assessment yet. When Codegate ships source collection and scoring (its
+`story:scoring-suggestions`), the page reads that output; the background-run machinery for it
+(single start, process-group tracking, shutdown barrier) is already in place
+(`story:quality-codegate`). A missing assessment is never shown as a score.
 
 ## Later: editing
 
@@ -207,3 +211,4 @@ behind the same token and Host check, plus a confirmation step in the SPA.
 `ess/system.yaml` (`format: ess/20`, the newest ess 0.52.0 implements) and
 `ess/domains/project.yaml`. `ess specify validate --path ess` printed
 `repoview v1 — 2 file(s), valid`.
+

@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:repository-page
 kind: story
-status: draft
+status: implemented
 title: Git state, documents and tasks
 summary: Status, commits, tags, remotes, worktrees, README/AGENTS/STATUS/CHANGELOG and task list behind /api/vcs, /api/docs, /api/tasks.
 relations:
@@ -24,7 +24,11 @@ scope:
   path: web/src/components/repository/
 - confidence: cited
   path: web/src/pages/RepositoryPage.vue
-revision: 8
+revision: 12
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-05T13:40:02Z", actor: "human:timo", revision: 9}
+- {from: "proposed", to: "active", at: "2026-10-05T13:40:02Z", actor: "human:timo", revision: 10}
+- {from: "active", to: "implemented", at: "2026-10-05T15:16:16Z", actor: "human:timo", revision: 12, decided_on: {"recorded":{"test_result":2,"review_outcome":3,"verification":1}}}
 ---
 ## Story
 
@@ -38,7 +42,6 @@ As an engineer, I read the project's Git state and its top-level documents on on
    | `/api/vcs` | `{ branch, head, upstream, ahead, behind, dirty: [{path, status}], commits: [{sha, author, date, subject}] (last 50), tags: [{name, sha, date}] (newest 30), remotes: [{name, url}], worktrees: [{path, head, branch}] }` from `git status --porcelain=v2 --branch -z`, `git log -50 --format=…`, `git tag --sort=-creatordate --format=…`, `git remote -v`, `git worktree list --porcelain`, all with the read-only git environment the `vcs` source already uses |
    | `/api/docs` | `[{ "name": "README.md", "present": bool }]` for README.md, AGENTS.md, STATUS.md, CHANGELOG.md |
    | `/api/docs/{name}` | `{ "name", "markdown": "<file content>" }`; `{name}` must be one of those four, else 404; files over 1 MiB are 413 |
-   | `/api/tasks` | `task --list-all --json` passed through when `Taskfile.yml` exists and `task` is on `PATH`; otherwise 404 or 503 with the tool shape |
    Remote URLs have any `user:password@` or token userinfo removed before they leave the server
    (test with `https://x-access-token:abc@github.com/o/r.git`).
 2. Repository page (`/repository`): a status block (branch or "detached HEAD", head, upstream with
@@ -62,3 +65,11 @@ Owns `crates/repoview-sources/src/vcs.rs`, `crates/repoview-sources/src/docs.rs`
 ## Out of scope
 
 Diffs, blame, file browsing; any write.
+
+
+## Decision 2026-10-05: no task list
+
+`task --list-all --json` evaluates a Taskfile's `vars: sh:` commands when it declares `dotenv:`
+(`review-result:adversary-repository-page-pass-1`, finding 1), so listing tasks through the `task` CLI
+runs a cloned repository's shell code. `/api/tasks` and the task list are removed from this story.
+Reading `Taskfile.yml` without executing it is a later story.

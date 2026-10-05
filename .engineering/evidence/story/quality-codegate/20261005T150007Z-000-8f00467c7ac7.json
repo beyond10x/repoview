@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-05T15:00:07Z",
+  "actor": "human:timo",
+  "artifact": "story:quality-codegate",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:adversary-quality-codegate-pass-1",
+    "review": "review-result:adversary-quality-codegate-pass-1",
+    "outcome": "fixed"
+  }
+}

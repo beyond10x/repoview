@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:plan-pages
 kind: story
-status: draft
+status: implemented
 title: Plan board, tree and artifact pages
 summary: aep JSON behind /api/plan/*; board columns from aep, vision-to-task tree, artifact page with rendered body.
 relations:
@@ -26,7 +26,11 @@ scope:
   path: web/src/pages/PlanBoardPage.vue
 - confidence: cited
   path: web/src/pages/PlanTreePage.vue
-revision: 9
+revision: 14
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-05T13:40:01Z", actor: "human:timo", revision: 10}
+- {from: "proposed", to: "active", at: "2026-10-05T13:40:01Z", actor: "human:timo", revision: 11}
+- {from: "active", to: "implemented", at: "2026-10-05T15:16:15Z", actor: "human:timo", revision: 14, decided_on: {"recorded":{"test_result":1,"review_outcome":1,"verification":1}}}
 ---
 ## Story
 
@@ -46,13 +50,15 @@ reasons for its status.
    | `/api/plan/artifacts/{id}` | `aep plan artifact show {id} --format json` |
    | `/api/plan/artifacts/{id}/history` | `aep plan artifact history {id} --format json` |
    | `/api/plan/artifacts/{id}/explain` | `aep plan artifact explain {id} --format json` |
-   `{id}` must match `^[a-z0-9-]+:[a-z0-9-]+$` or the answer is 400 and no process starts. A
-   non-zero `aep` exit is 502 with `{ "tool": "aep", "exit": n, "stderr": "…" }`. No `aep` on `PATH`
+   `{id}` must match `^[A-Za-z0-9_-][A-Za-z0-9._-]*:[A-Za-z0-9_-][A-Za-z0-9._-]*$` (aep's id grammar without `/`; `vision:O2` is valid) or the answer is 400 and no process starts. A
+   non-zero `aep` exit is 502 with `{ "tool": "aep", "exit": n, "stderr": "…", "stdout": "…" }` (`validate`
+   prints its problems on stdout and exits 1). No `aep` on `PATH`
    is 503 with the same shape. Rust tests use a stub `aep` on a test `PATH` for each case, including
-   an id with `;`, `..`, a space and an upper-case letter.
+   an id with `;`, `..` as a whole part, a space and a `/`, and `vision:O2` accepted.
 2. Board page (`/plan`): one column per entry of `board --format json`, in its order, with the
-   column's own status name and description; each artifact as a card with kind, id, title. Filter
-   box (title, id, tag) and kind filter. Status names and descriptions come only from the board
+   column's own status name, and its description when `board --format json` carries one (aep 0.68.0
+   does not; nothing is invented in its place); each artifact as a card with kind, id, title. Filter
+   box (title, id, and tag where the list output carries tags) and kind filter. Status names and descriptions come only from the board
    output; the web code holds no list of statuses (a vitest case feeds an invented status
    `zz-new` and sees its column).
 3. Tree page (`/plan/tree`): a collapsible tree built from `relations` in `artifacts`: children are
@@ -78,3 +84,5 @@ Owns `crates/repoview-sources/src/plan.rs`, `crates/repoview/src/api/plan.rs`,
 ## Out of scope
 
 Moves, approvals and any write; `aep plan serve`; caching.
+
+

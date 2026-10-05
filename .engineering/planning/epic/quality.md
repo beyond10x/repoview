@@ -9,31 +9,29 @@ relations:
 - serves: vision:repoview
 - implements: architecture-design:repoview
 - depends_on: epic:shell
-revision: 1
+revision: 2
 ---
 ## Outcome
 
-The Codegate rating, scores and finding counts show per language the project contains, with the
-producing binary and version named.
+The Quality page shows what the beyond10x Codegate (`github.com/beyond10x/codegate`) says about the
+project, with the producing binary and version named, and says plainly what it cannot say yet.
 
 ## Scope
 
-- Source `quality`: detect languages from manifests (`Cargo.toml`, `go.mod`, `package.json`,
-  `*.md`); run `codegate --root . --language <l> --format json assess --gate all` for each language
-  the installed codegate reports in `codegate capabilities`; run in the background, the panel fills
-  in when done.
-- Quality page: `rating`, `scores`, `summary`, `finding_counts`, `top_findings`, the producer.
-- The rating on Overview.
-- A language the installed codegate does not support shows "not assessed" with the reason, never a
-  score.
+- Source `quality`: locate the beyond10x `codegate` on `PATH` by its `--version`; the Go
+  `fluxplane/codegate` is skipped and never run for an assessment (operator, 2026-10-05).
+- Quality page: producer, the commands Codegate offers, and its assessment once Codegate ships one.
+- No score, rating or finding without an assessment.
 
 ## Acceptance
 
-- On a Go repository the rating matches `codegate assess` run by hand.
-- On a Rust-only repository with the current `fluxplane/codegate`, Quality shows Rust "not
-  assessed: codegate does not support rust" and Markdown assessed.
+- With codegate 0.3.0 installed, Quality names `~/.local/bin/codegate` 0.3.0, lists `evaluate`, and
+  states that there is no source assessment yet.
+- With only the Go codegate on `PATH`, Quality says the beyond10x codegate was not found and names
+  the skipped binary.
+- When Codegate adds a source assessment command, a later story renders its output.
 
 ## Depends on
 
-`epic:shell`. The assessment format follows `beyond10x/codegate` once it ships scoring
-(`architecture-design:repoview`, section Codegate).
+`epic:shell`. Stories: `story:quality-page` (run machinery), `story:quality-codegate` (locator and
+page).

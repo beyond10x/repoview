@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:page-frame
 kind: story
-status: active
+status: implemented
 title: 'Shared page frame: API module registry, client, routes, nav, markdown and Mermaid components'
 summary: Routing, nav, apiGet with static mode, MarkdownView (markdown-it + DOMPurify), MermaidView, so page stories add only their own files.
 relations:
@@ -37,10 +37,11 @@ scope:
   path: web/src/pages/
 - confidence: cited
   path: web/src/router.ts
-revision: 16
+revision: 17
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T13:28:40Z", actor: "human:timo", revision: 15}
 - {from: "proposed", to: "active", at: "2026-10-05T13:28:40Z", actor: "human:timo", revision: 16}
+- {from: "active", to: "implemented", at: "2026-10-05T15:16:15Z", actor: "human:timo", revision: 17, decided_on: {"recorded":{"test_result":1,"review_outcome":2,"verification":1}}}
 ---
 ## Story
 

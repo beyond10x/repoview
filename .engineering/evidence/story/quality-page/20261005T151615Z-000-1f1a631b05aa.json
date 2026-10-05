@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T15:16:15Z",
+  "actor": "human:timo",
+  "artifact": "story:quality-page",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check steps on wave/two d8c59a5 (coordinator): validate 0, ess validate 0, fmt 0, clippy 0, cargo test 188 passed 0 failed, pnpm check 524 passed, task build 0"
+  }
+}

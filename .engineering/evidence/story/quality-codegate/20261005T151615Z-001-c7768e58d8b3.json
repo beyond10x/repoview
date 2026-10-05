@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T15:16:15Z",
+  "actor": "human:timo",
+  "artifact": "story:quality-codegate",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "VERIFIED: /api/quality names ~/.local/bin/codegate 0.3.0, skipped ~/go/bin/codegate, commands [evaluate] (implementor live run with the real binaries); base read the Go codegate"
+  }
+}

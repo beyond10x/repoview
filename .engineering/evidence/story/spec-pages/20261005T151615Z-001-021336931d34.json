@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-05T15:16:15Z",
+  "actor": "human:timo",
+  "artifact": "story:spec-pages",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "VERIFIED: /api/spec/roots 200 on the merged release binary; base had placeholder pages only"
+  }
+}
