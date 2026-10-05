@@ -2,13 +2,27 @@
 format: aep.planning-md/3
 id: story:shared-tool-runner
 kind: story
-status: draft
+status: active
 title: One subprocess runner with exit code and output for every module
 summary: run_output in repoview-sources; plan and spec API modules drop their private runners.
 relations:
 - decomposes: epic:shell
 - serves: vision:repoview
-revision: 1
+scope:
+- confidence: cited
+  path: crates/repoview-sources/src/lib.rs
+- confidence: cited
+  path: crates/repoview-sources/src/process.rs
+- confidence: cited
+  path: crates/repoview-sources/tests/process.rs
+- confidence: cited
+  path: crates/repoview/src/api/plan.rs
+- confidence: cited
+  path: crates/repoview/src/api/spec.rs
+revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-05T16:15:10Z", actor: "human:timo", revision: 7}
+- {from: "proposed", to: "active", at: "2026-10-05T16:15:10Z", actor: "human:timo", revision: 8}
 ---
 ## Story
 

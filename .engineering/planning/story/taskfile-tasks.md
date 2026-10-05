@@ -2,14 +2,28 @@
 format: aep.planning-md/3
 id: story:taskfile-tasks
 kind: story
-status: draft
+status: active
 title: Task list read from Taskfile.yml without executing it
 summary: Parse Taskfile.yml in Rust for task names and descriptions; nothing runs.
 relations:
 - decomposes: epic:repository
 - serves: vision:repoview
 - depends_on: story:repository-page
-revision: 1
+scope:
+- confidence: cited
+  path: crates/repoview/src/api/repository.rs
+- confidence: cited
+  path: crates/repoview/tests/api_tasks.rs
+- confidence: cited
+  path: web/src/api/repository.ts
+- confidence: cited
+  path: web/src/components/repository/
+- confidence: cited
+  path: web/src/pages/RepositoryPage.vue
+revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-05T16:15:10Z", actor: "human:timo", revision: 7}
+- {from: "proposed", to: "active", at: "2026-10-05T16:15:10Z", actor: "human:timo", revision: 8}
 ---
 ## Story
 

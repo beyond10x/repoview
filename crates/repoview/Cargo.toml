@@ -17,9 +17,10 @@ libc.workspace = true
 rust-embed.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml_ng.workspace = true
 subtle.workspace = true
 tokio.workspace = true
+tower.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-tower.workspace = true
