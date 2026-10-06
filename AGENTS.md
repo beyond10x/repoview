@@ -47,6 +47,10 @@ SPA embedded in the binary. Humans start at [`README.md`](README.md).
 - Use managed worktrees for changes; keep the primary checkout clean.
 - Builds use `CARGO_TARGET_DIR=$HOME/.cache/b10x-target/repoview`; check `df -h /` first and do
   not start a build under 10G free.
+- CI has no `TMPDIR`, so `tempfile::tempdir()` lands in `/tmp`, which `browser.rs` refuses for the
+  token page. A test that hands repoview a cache or runtime directory creates it with
+  `tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR"))`; run `TMPDIR=/tmp cargo test` before pushing
+  such a test.
 - Planning store mutations use `aep plan artifact` only (`aep:planning`). Scratch bodies for
   `--from` go in `.engineering/drafts/`, which is git-ignored.
 

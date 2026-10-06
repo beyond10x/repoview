@@ -106,7 +106,7 @@ fn sigint_exits_while_a_client_holds_a_half_sent_request() {
 #[test]
 fn sighup_does_not_leave_the_redirect_page_behind() {
     let project = tempfile::tempdir().unwrap();
-    let cache = tempfile::tempdir().unwrap();
+    let cache = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
     let tools = tempfile::tempdir().unwrap();
     let record = tools.path().join("argv.txt");
     let opener = recording_opener(tools.path(), &record);

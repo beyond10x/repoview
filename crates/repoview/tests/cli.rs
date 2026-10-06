@@ -389,7 +389,7 @@ fn wait_for(path: &Path) -> String {
 fn browser_gets_a_private_redirect_file_not_the_token() {
     use std::os::unix::fs::PermissionsExt;
     let project = tempfile::tempdir().unwrap();
-    let cache = tempfile::tempdir().unwrap();
+    let cache = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
     let tools = tempfile::tempdir().unwrap();
     let record = tools.path().join("argv.txt");
     let opener = recording_opener(tools.path(), &record);
@@ -432,7 +432,7 @@ fn browser_gets_a_private_redirect_file_not_the_token() {
 #[test]
 fn relative_browser_variable_is_not_run_from_the_project() {
     let project = tempfile::tempdir().unwrap();
-    let cache = tempfile::tempdir().unwrap();
+    let cache = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
     let record = project.path().join("argv.txt");
     recording_opener(project.path(), &record);
     let mut command = repoview();
@@ -513,7 +513,7 @@ fn open_with_page(project: &Path, cache: &Path, tools: &Path) -> (Server, std::p
 fn hup_quit_and_int_each_delete_the_redirect_page() {
     for signal in ["HUP", "QUIT", "INT"] {
         let project = tempfile::tempdir().unwrap();
-        let cache = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
         let tools = tempfile::tempdir().unwrap();
         let (mut server, page) = open_with_page(project.path(), cache.path(), tools.path());
         assert!(page.exists(), "{signal}");
@@ -559,8 +559,8 @@ fn cache_symlinked_into_the_project_is_refused_before_creating_anything() {
 fn private_runtime_dir_is_preferred_for_the_redirect_page() {
     use std::os::unix::fs::PermissionsExt;
     let project = tempfile::tempdir().unwrap();
-    let cache = tempfile::tempdir().unwrap();
-    let runtime = tempfile::tempdir().unwrap();
+    let cache = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let runtime = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
     std::fs::set_permissions(runtime.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
     let tools = tempfile::tempdir().unwrap();
     let record = tools.path().join("argv.txt");
@@ -587,8 +587,8 @@ fn private_runtime_dir_is_preferred_for_the_redirect_page() {
 fn runtime_dir_that_is_not_private_falls_back_to_the_cache() {
     use std::os::unix::fs::PermissionsExt;
     let project = tempfile::tempdir().unwrap();
-    let cache = tempfile::tempdir().unwrap();
-    let runtime = tempfile::tempdir().unwrap();
+    let cache = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let runtime = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
     std::fs::set_permissions(runtime.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
     let tools = tempfile::tempdir().unwrap();
     let record = tools.path().join("argv.txt");
