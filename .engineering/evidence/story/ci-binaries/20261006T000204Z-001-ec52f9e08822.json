@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-06T00:02:04Z",
+  "actor": "human:timo",
+  "artifact": "story:ci-binaries",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "INCONCLUSIVE until the first main push runs ci.yml on GitHub; release smoke script verified locally against the release binary (tag 0.1.0 exit 0, 0.9.9 exit 1); 15 workflow tests"
+  }
+}

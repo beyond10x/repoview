@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-06T00:02:04Z",
+  "actor": "human:timo",
+  "artifact": "story:static-export",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "VERIFIED: release binary exported this repository: 173 routes, 0 non-2xx, no $HOME in any file, index.html in static mode; base had no export command"
+  }
+}

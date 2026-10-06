@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:static-export
 kind: story
-status: active
+status: implemented
 title: repoview export writes a static copy of every page
 summary: Embedded SPA in static mode plus one JSON per API answer from the real router; no token, no home paths; hash routing.
 relations:
@@ -21,10 +21,11 @@ scope:
   path: web/src/api/client.ts
 - confidence: cited
   path: web/src/router.ts
-revision: 9
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T16:15:10Z", actor: "human:timo", revision: 8}
 - {from: "proposed", to: "active", at: "2026-10-05T16:15:10Z", actor: "human:timo", revision: 9}
+- {from: "active", to: "implemented", at: "2026-10-06T00:02:04Z", actor: "human:timo", revision: 10, decided_on: {"recorded":{"test_result":1,"review_outcome":4,"verification":1}}}
 ---
 ## Story
 

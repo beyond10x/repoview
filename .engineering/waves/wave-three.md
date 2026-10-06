@@ -38,3 +38,19 @@ The public docs site (`docs` skill) follows once `story:static-export` merges.
 - story:taskfile-tasks: committed on impl/taskfile-tasks after correction round 1 (Rust 219, web 542); adversary pass 2 not yet run; not merged.
 - Wave four drafted outside the store: ~/.cache/repoview-wave-four/coordinator/story-docs-site.md.
 - Next: taskfile pass 2, merge, full gate, close wave three, push; then docs site (wave four) and Stage C/D.
+
+## Close (2026-10-06)
+
+| unit | adversary passes | findings per pass | result |
+|---|---|---|---|
+| story:shared-tool-runner | 1 | 0 | merged, implemented |
+| story:ci-binaries | 2 | 2, then 2 notes | merged; implemented once `ci.yml` runs green on `main` |
+| story:static-export | 2 | 4, then 5 (2 infeasible); a coordinator review caught a home-path leak in the final correction | merged, implemented |
+| story:taskfile-tasks | 2 | 4, then 6, none carried | left the wave; branch `impl/taskfile-tasks` kept; redesign recorded in the story |
+
+Coordinator commits: `ess/22`; a `web/dist` digest in `build.rs` so cargo and sccache recompile when
+the web build changes; README and AGENTS.md (map, gate steps, release procedure).
+
+Gate on `wave/three`, one exit per step: validate 0, ess validate 0, fmt 0, clippy 0, cargo test 0
+(255 passed, 35 binaries, `--list` 255), pnpm install 0, pnpm check 0 (541 passed), task build 0.
+`repoview export` with the release binary on this repository: 173 routes, 0 non-2xx, no home path.

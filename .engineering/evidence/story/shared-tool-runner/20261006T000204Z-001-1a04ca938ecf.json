@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-06T00:02:04Z",
+  "actor": "human:timo",
+  "artifact": "story:shared-tool-runner",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "VERIFIED: plan and spec API tests unchanged and green on the shared runner; private runners removed"
+  }
+}
