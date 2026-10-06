@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:ci-binaries
 kind: story
-status: active
+status: implemented
 title: CI builds downloadable binaries with the web app embedded
 summary: ci.yml runs task check and uploads a Linux build per main push; release-build.yml builds three targets with smoke tests and SHA256SUMS on a tag.
 relations:
@@ -15,10 +15,11 @@ scope:
   path: .github/workflows/release-build.yml
 - confidence: cited
   path: crates/repoview/tests/workflows.rs
-revision: 6
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-05T16:15:09Z", actor: "human:timo", revision: 5}
 - {from: "proposed", to: "active", at: "2026-10-05T16:15:10Z", actor: "human:timo", revision: 6}
+- {from: "active", to: "implemented", at: "2026-10-06T00:19:13Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"test_result":1,"review_outcome":3,"verification":2}}}
 ---
 ## Story
 
