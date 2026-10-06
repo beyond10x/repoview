@@ -784,3 +784,13 @@ fn release_build_uploads_three_archives_and_sha256sums() {
     assert!(path.contains("dist/*.tar.gz") && path.contains("dist/SHA256SUMS"));
     assert_eq!(upload["with"]["if-no-files-found"].as_str(), Some("error"));
 }
+
+/// The gate installs the prebuilt `aep` release, which links against glibc 2.39; ubuntu-22.04 has
+/// 2.35 and the first CI run failed with "version `GLIBC_2.39' not found (required by aep)".
+/// Release binaries keep building on ubuntu-22.04 so they run on the older glibc.
+#[test]
+fn the_gate_runs_on_a_runner_whose_glibc_runs_the_prebuilt_aep() {
+    let ci = workflow("ci.yml");
+    let gate = &ci["jobs"]["check"];
+    assert_eq!(gate["runs-on"].as_str(), Some("ubuntu-24.04"));
+}
